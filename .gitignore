@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+# Real names, emails and Slack IDs (from the Slack user cache CSV). Whether it is committed is decided at commit time.
+seed/people.json
+__pycache__/
+.venv/
+.pytest_cache/
+refdocs/
+deliverables/
+.gstack/
+# Machine-local editor / agent settings (the shared .claude/settings.json is tracked)
+.claude/settings.local.json

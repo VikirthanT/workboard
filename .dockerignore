@@ -1,0 +1,8 @@
+# Only server/ goes into the API image. Everything else (.env, refdocs/ and seed/ with real people, the client)
+# stays out of the build context.
+*
+!server
+server/.venv
+server/.pytest_cache
+server/tests
+**/__pycache__
