@@ -1,0 +1,63 @@
+/* The login page's background, ported from AtiUI's split-login pattern: a dot grid across the whole page and two soft
+   green glows on the brand panel. Every colour is a token, so dark mode follows without a second set of rules. */
+
+@keyframes login-glow-drift {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(20px, -30px); }
+}
+
+.login-page {
+  position: relative;
+  isolation: isolate;
+  overflow: clip; /* the glows may spill past the brand panel (so they are not cut) but never past the page */
+}
+
+/* The dots: one fixed layer behind everything, so it does not scroll with the content on a short window. */
+.login-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, var(--color-dot-grid) 1.15px, transparent 1.15px);
+  background-size: 26px 26px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* The glows live inside the brand panel, behind its text (z-index -1 inside the panel's own stacking context). */
+.login-brand-panel {
+  isolation: isolate;
+}
+
+.login-brand-panel::before,
+.login-brand-panel::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Top left: the green blush at the top of the page. */
+.login-brand-panel::before {
+  width: 520px;
+  height: 520px;
+  top: -100px;
+  left: -80px;
+  background: radial-gradient(circle, var(--color-brand-ring) 0%, transparent 65%);
+}
+
+/* Bottom left: a quieter glow that drifts slowly (only when the person has not asked for less motion). */
+.login-brand-panel::after {
+  width: 380px;
+  height: 380px;
+  bottom: -80px;
+  left: -50px;
+  background: radial-gradient(circle, var(--color-brand-glow) 0%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .login-brand-panel::after {
+    animation: login-glow-drift 10s var(--ease-standard) infinite alternate;
+  }
+}
