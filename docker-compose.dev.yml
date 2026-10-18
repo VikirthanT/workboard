@@ -1,0 +1,24 @@
+# Local development database (make dev / make db-up). Not for production: see docker-compose.yml.
+# Reachable from the host on 127.0.0.1 only (never publish it as "5436:5432": the short form binds every
+# interface and exposes Postgres to the whole LAN). The API runs on the host (make api-dev).
+# Credentials come from .env (see .env.example); the password has no default anywhere.
+services:
+  db:
+    image: postgres:16
+    container_name: workboard-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-workboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set. Copy .env.example to .env and set a password.}
+      POSTGRES_DB: ${POSTGRES_DB:-workboard}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5436}:5432"
+    volumes:
+      - workboard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workboard} -d ${POSTGRES_DB:-workboard}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  workboard_pgdata:

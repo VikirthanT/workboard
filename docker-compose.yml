@@ -1,0 +1,50 @@
+# Production stack (make prod-up): database + API. Local development uses docker-compose.dev.yml.
+# Credentials come from .env (see .env.example); the password has no default.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    # No `ports:` on purpose: the database is reachable only over the internal Compose network (db:5432).
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-workboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set. Copy .env.example to .env and set a strong password.}
+      POSTGRES_DB: ${POSTGRES_DB:-workboard}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workboard} -d ${POSTGRES_DB:-workboard}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    # No env_file on purpose: only what the API needs is passed in, and DEV_AUTH is forced off, so nothing
+    # dev-only in .env can reach this container.
+    # NOTE: keep the password URL-safe (letters and digits; avoid @ : / ? #), it goes into DATABASE_URL.
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-workboard}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-workboard}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-atimotors.com}
+      DEV_AUTH: "false"
+      # Google sign-in (see .env.example). Empty means "not set up": protected routes then answer 501.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      SECRET_KEY: ${SECRET_KEY:-}
+      TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-28800}
+    # Healthy once the migrations are applied and the API answers; `make prod-up` waits for it before loading people.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
