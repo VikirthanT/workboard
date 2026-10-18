@@ -1,0 +1,608 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   AtiUI — design tokens
+
+   Rules this file exists to enforce:
+
+   1. ONE name per value. The old file declared --color-teal AND --color-primary
+      with the same hex, --color-charcoal AND --color-foreground with the same
+      hex. Two names for one colour means nobody ever chose.
+   2. Everything is a step on a scale. Six type sizes, four radii, three
+      elevations, four durations. If a value isn't on a scale, it doesn't ship.
+   3. Colour is scarce. The brand teal is reserved for the single primary action
+      on screen plus focus. State is carried by structure — a dot, a weight, a
+      hairline — not by more colour.
+   4. Tokens are named semantically (ink, line, brand), not by hue, so a dark
+      theme is later a values swap rather than a rewrite.
+   ───────────────────────────────────────────────────────────────────────── */
+
+
+@import 'tailwindcss';
+
+/* Dark mode is driven by a class on <html>, not by prefers-color-scheme, so the
+   toggle can override the OS. Written out rather than left to the default
+   because the v4 default is the media query, and a design system that only
+   follows the OS cannot be demonstrated or screenshotted in the other theme.
+
+   The escape hatch, not the mechanism. Because every colour is a semantic
+   token that flips below, no component should need `dark:` — if one does, the
+   token is missing rather than the variant being wrong. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The four families are vendored as woff2 in ./fonts rather than pulled from
+ * npm. They are OFL, so redistribution is fine, and it means a consuming app
+ * never installs a font package — and that the published CSS doesn't inline
+ * ~370 kB of typeface into every app's stylesheet (see scripts/extract-fonts.mjs).
+ */
+
+/* Latin subset only: this system is Latin + numbers by decision, and the
+   default fontsource entry also ships Cyrillic, Greek and Vietnamese. */
+@font-face {
+  font-family: 'Geist Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./fonts/GeistMono.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Cal Sans UI';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('./fonts/CalSansUI.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Cal Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url('./fonts/CalSans.woff2') format('woff2-variations');
+}
+
+/* Wordmark only — nothing in the UI is allowed to name this family, same as
+   the other three. Unbounded ExtraBold: a wide, geometric display face with
+   enough personality to carry the big wordmark on its own, set in capitals
+   with a gradient fill (see split-login.css). Single weight (800), latin
+   subset, OFL. */
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url('./fonts/Unbounded.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+  /* ── Typeface ────────────────────────────────────────────────────────────
+     Three roles, each with one job. Nothing else in the codebase is allowed
+     to name a family.
+
+     Cal Sans UI — every piece of UI text. Drawn for 13-15px interfaces, which
+                   is where it spends its life, so it stays crisp there.
+     Cal Sans    — headings: page titles, section titles, the split-login hero.
+                   Sibling of the UI cut, so the two share a skeleton and read
+                   as one voice rather than two fonts that happen to coexist.
+     Geist Mono  — identifiers, amounts, tabular data. Carries the tabular
+                   figure setting, which is what stops live tables from
+                   jittering as values change.
+
+     Latin + numbers only. For Indic coverage, swap --font-sans. */
+  --font-sans: 'Cal Sans UI', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cal Sans', 'Cal Sans UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Fourth role: the brand mark. Not a fourth general-purpose family — this
+     one is for the wordmark and nothing else. */
+  --font-wordmark: 'Unbounded', 'Cal Sans', system-ui, sans-serif;
+
+  /* ── Type scale: six steps, rem-based ────────────────────────────────────
+     Rem so the whole scale honours the user's browser font-size setting.
+     Six steps, not nine — the old scale had 7 sizes and 4 arbitrary
+     text-[Npx] values sitting next to them. */
+  --text-xs:   0.75rem;    /* 12px — captions, table meta, micro-labels   */
+  --text-xs--line-height: 1.3333;
+  --text-sm:   0.8125rem;  /* 13px — default UI body                       */
+  --text-sm--line-height: 1.3846;
+  --text-base: 0.875rem;   /* 14px — emphasis body, table cells            */
+  --text-base--line-height: 1.4286;
+  --text-md:   1rem;       /* 16px — section and dialog titles             */
+  --text-md--line-height: 1.5;
+  --text-lg:   1.25rem;    /* 20px — card titles, page sections             */
+  --text-lg--line-height: 1.4;
+  --text-xl:   1.75rem;    /* 28px — page titles                           */
+  --text-xl--line-height: 1.2143;
+  --text-display: clamp(2.125rem, 4vw, 3.5rem); /* 34-56px — the login headline only */
+  --text-display--line-height: 1.1;
+
+  /* ── Surface: five steps ─────────────────────────────────────────────────
+     Depth comes from stacking these, not from stacking shadows.
+     canvas must stay clearly darker than surface or every card reads as a
+     faint outline on white and the whole thing goes washed out.
+     The nav rail is plain --color-surface (white) against canvas: 1.18:1,
+     measured. A dedicated sidebar token was tried at two darker values and
+     rejected both times — 1.05:1 is invisible across a 224px plane, and 1.17:1
+     is no more visible than white while sitting at 1.00:1 against the cards.
+     White wins on the same contrast with one fewer token. */
+  --color-canvas:         #f7f8f9;   /* page background                    */
+  --color-surface:        #ffffff;   /* cards, panels, menus, inputs       */
+  --color-surface-subtle: #f7f8fa;   /* quiet fills: table head, icon well */
+  --color-surface-sunken: #e4e8ef;   /* inset wells, track backgrounds     */
+  --color-surface-hover:  rgba(22, 27, 41, 0.04);
+  --color-surface-active: rgba(22, 27, 41, 0.07);
+
+  /* ── Ink: four steps of text ─────────────────────────────────────────────
+     Collapses the old five-way split across foreground / charcoal / secondary
+     / ink / muted, where charcoal and foreground were the same hex and
+     charcoal-soft and secondary were the same hex. */
+  --color-ink:         #161b29;   /* primary text, headings               */
+  --color-ink-muted:   #4a5068;   /* secondary text, body copy            */
+  --color-ink-subtle:  #949cb2;   /* tertiary: captions, placeholders     */
+  --color-ink-disabled:#b8becd;   /* disabled text                        */
+  --color-ink-inverse: #ffffff;   /* text on brand / dark fills           */
+
+  /* ── Line: three steps of border ───────────────────────────────────────── */
+  --color-line:        #e2e6ee;   /* default hairline                     */
+  --color-line-strong: #c9cfdd;   /* hover, emphasised input edge         */
+  --color-line-subtle: #eef0f4;   /* internal dividers                    */
+
+  /* ── Inverse surface: for elements that sit ON the page and are lighter
+        or darker than everything around them ────────────────────────────────
+     A toast is the case this exists for. It used to be `bg-ink text-ink-inverse`,
+     which is only half a pair: the system had a token for text-on-dark and
+     none for the dark itself, so flipping the theme turned every toast into a
+     white slab. Declaring both halves is the "one name per value" rule applied
+     honestly — a name for the ink without a name for its ground is the same
+     drift as --color-teal and --color-primary with one hex. */
+  --color-inverse-surface: #161b29;   /* toast ground, inverse banners     */
+  --color-inverse-ink:    #ffffff;    /* text on that ground               */
+  --color-inverse-border: rgba(60, 191, 173, 0.20);
+
+  /* ── Scrim: the modal backdrop ───────────────────────────────────────────
+     Was `bg-[rgba(26,31,46,0.5)]` inline on the Dialog overlay. A literal
+     cannot flip, and in dark mode a 50% wash of near-black over a near-black
+     page is invisible — the dialog stops reading as a layer. The dark value
+     below is heavier for exactly that reason. */
+  --color-scrim: rgba(26, 31, 46, 0.5);
+
+  /* Was a literal radial-gradient in split-login.css. Same reasoning. */
+  --color-brand-glow: rgba(60, 191, 173, 0.08);
+
+  /* ── Dot grid: the texture behind the split-login page ───────────────────
+     Its own token because it is NOT a border step. --color-line-strong is
+     tuned to divide a surface, and a grid of those reads as a rendering fault
+     rather than a texture — it needs to be a step further from the background
+     than any border is, in whichever direction "away" is for the theme. */
+  --color-dot-grid: #a7b0c4;
+
+  /* ── Wordmark: the big decorative ATIUI on the split-login panel ──────────
+     Two tokens, and the rule is that the treatment must be IDENTICAL in both
+     themes — only the hue changes.
+
+     There is no stroke token because there is no stroke. The letters used to
+     be stroked in brand with a solid fill on top (paint-order: stroke fill),
+     which left a sub-pixel rim of teal around every white glyph. At 96px that
+     rim anti-aliased into a hard cyan fringe and the whole word read as a
+     rendering fault rather than a mark. The glow does the work the outline was
+     standing in for, and the fill alone is enough to carry the letterforms.
+
+     FILL is solid in both. White letters cannot go on a near-white panel, so
+     light fills with brand and dark fills with white — that is the only
+     difference, and it is forced.
+
+     GLOW is the theme's own accent, weaker in light because a dark halo on
+     white reads as dirt where the same halo on near-black reads as light. */
+  --color-wordmark-fill: #3cbfad;
+  --color-wordmark-glow: rgba(60, 191, 173, 0.42);
+  /* Gradient ends of the wordmark fill. */
+  --color-wordmark-from: #34d6bf;
+  --color-wordmark-to: #0e7f8f;
+
+  /* ── Brand: the one accent, with a complete scale ────────────────────────
+     The old library used this teal for eight unrelated things at once. It is
+     now reserved for: the primary action, focus, and selection. */
+  --color-brand:        #3cbfad;
+  --color-brand-hover:  #34998d;
+  --color-brand-fg:     #ffffff;
+  --color-brand-subtle: #e6f7f5;                    /* quiet wash          */
+  --color-brand-muted:  #a8e5de;
+  --color-brand-border: rgba(60, 191, 173, 0.30);
+  --color-brand-ring:   rgba(60, 191, 173, 0.18);   /* focus halo          */
+  --color-brand-ink:    #0e5c54;                    /* text on brand-subtle*/
+
+  /* ── Status: three states, each a full five-part scale ───────────────────
+     Deliberately no blue. "Info" is the brand teal; a fourth hue would put us
+     back in generic-Tailwind territory. Base colours are the DEEP end of each
+     hue so that white-on-solid always clears contrast — the old #f59e0b and
+     #22c48a both failed that as button backgrounds. */
+  --color-danger:        #cf3f3f;
+  --color-danger-hover:  #b23333;
+  --color-danger-fg:     #ffffff;
+  --color-danger-subtle: #fdecec;
+  --color-danger-border: #f3c9c9;
+  --color-danger-ink:    #8f2626;
+
+  --color-success:        #178a60;
+  --color-success-hover:  #10714d;
+  --color-success-fg:     #ffffff;
+  --color-success-subtle: #e8f6ef;
+  --color-success-border: #bfe5d1;
+  --color-success-ink:    #0e6244;
+
+  --color-warning:        #a75c09;
+  --color-warning-hover:  #8a4a07;
+  --color-warning-fg:     #ffffff;
+  --color-warning-subtle: #fdf3e3;
+  --color-warning-border: #eed7ab;
+  --color-warning-ink:    #7d4308;
+
+  /* ── Icons: four steps ───────────────────────────────────────────────────
+     The rule, so nobody has to eyeball it again:
+       an icon BESIDE text sits one step below that text's size
+       a STANDALONE icon (a chart mark, an empty-state glyph) sits one step above
+     14 next to 13px body, 16 beside 14px, 20 for a lone glyph at 18px+.
+
+     Off-scale sizes (10, 15, 17) are what this replaces. `size-*` is the
+     namespace, so these answer `size-icon-sm` as well as w-/h-. */
+  --size-icon-xs: 12px;   /* inside a 13-14px control, or a table cell    */
+  --size-icon-sm: 14px;   /* beside 13px body text — the default          */
+  --size-icon-md: 16px;   /* beside 14-15px text, or a button of lg        */
+  --size-icon-lg: 20px;   /* standalone: empty states, stat rows           */
+
+  /* ── Radius: four steps ──────────────────────────────────────────────────
+     Replaces nine arbitrary values (5, 6, 7, 8, 9, 10, 12, 14px + defaults). */
+  --radius-sm: 4px;   /* badges, chips, tight controls   */
+  --radius-md: 6px;   /* inputs, buttons, menu items     */
+  --radius-lg: 8px;   /* cards, panels, popovers         */
+  --radius-xl: 12px;  /* dialogs, toasts                 */
+
+  /* ── Elevation: three steps, lifted from CredVault's own components ────
+     The values are not invented here. They are the three shadows that app
+     actually ships, so a card in AtiUI and a card in CredVault are the same
+     card. Replacing them with fainter ones is what made the two drift. */
+  --shadow-raised:  0 1px 4px rgba(26, 31, 46, 0.12);   /* cards, panels   */
+  --shadow-overlay: 0 4px 20px rgba(26, 31, 46, 0.12);  /* menus, popovers */
+  --shadow-modal:   0 8px 24px rgba(26, 31, 46, 0.14);  /* dialogs, toasts */
+
+  /* ── Motion: four durations, three curves ────────────────────────────────
+     One easing vocabulary. Transitions on this system use transition-colors
+     for state and transition-[transform,opacity] for movement, and nothing
+     else. */
+  --duration-instant: 100ms;
+  --duration-fast:    150ms;
+  --duration-base:    200ms;
+  --duration-slow:    320ms;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);     /* colour, opacity      */
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);   /* things arriving      */
+  --ease-exit:     cubic-bezier(0.4, 0, 1, 1);      /* things leaving       */
+
+  /* ── Animation: named entrances, declared here so reduced-motion below can
+        actually switch them off ───────────────────────────────────────────── */
+  --animate-fade-in:   fade-in   var(--duration-base) var(--ease-entrance) both;
+  --animate-fade-out:  fade-out  var(--duration-base) var(--ease-exit) both;
+  --animate-scale-in:  scale-in  var(--duration-base) var(--ease-entrance) both;
+  --animate-scale-out: scale-out var(--duration-fast) var(--ease-exit) both;
+  --animate-slide-up:  slide-up  var(--duration-base) var(--ease-entrance) both;
+  --animate-shimmer:   shimmer   1.6s linear infinite;
+  --animate-pulse-dot: pulse-dot 1.8s var(--ease-standard) infinite;
+  --animate-spin:      spin      700ms linear infinite;
+
+  @keyframes fade-in   { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes fade-out  { from { opacity: 1 } to { opacity: 0 } }
+  @keyframes scale-in  { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
+  @keyframes scale-out { from { opacity: 1; transform: scale(1) } to { opacity: 0; transform: scale(0.97) } }
+  @keyframes slide-up  { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes shimmer   { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+  @keyframes pulse-dot { 0%, 100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.4); opacity: 0.5 } }
+  @keyframes spin      { to { transform: rotate(360deg) } }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DARK THEME
+
+   Every value below is a swap, not a rewrite. Nothing above changes name, and
+   no component gains a `dark:` variant, because a component that needs one is
+   a component that reached for a literal instead of a token.
+
+   Three inversions do the real work. The rest is arithmetic:
+
+   1. DEPTH INVERTS. In light, canvas is a tint below surface and lines are
+      darker than what they divide. In dark it is the other way round: canvas
+      goes below surface, and lines are LIGHTER than the surface. A border
+      that is darker than its background is invisible on a dark background,
+      which is the single most common way a dark theme looks broken.
+
+   2. SHADOWS STOP DOING THE ELEVATION WORK. Dropping a dark shadow onto a
+      near-black surface is close to a no-op, so in dark the three elevations
+      are weaker and the borders carry the separation. The steps are kept so
+      the scale does not change shape, only weight.
+
+   3. SOLID FILLS INVERT THEIR TEXT. Light mode puts white on the teal; that
+      is 2.27:1 and it fails AA (see scripts/check-contrast.mjs). In dark the
+      brand fill is a lighter teal and the label goes near-black on it, which
+      both passes comfortably and stops the primary button glowing.
+
+   Every pair here is asserted by `npm run check:contrast`. Do not hand-edit a
+   value without re-running it.
+   ───────────────────────────────────────────────────────────────────────── */
+:root.dark {
+  color-scheme: dark;
+
+  /* Surface: canvas below surface, same relationship as light. */
+  --color-canvas:         #0e1016;
+  --color-surface:        #171a22;
+  --color-surface-subtle: #1e222c;
+  --color-surface-sunken: #0a0c12;
+  /* Hover and active are white washes, not black — a black wash on a dark
+     surface moves toward invisible, which reads as "this row is not
+     interactive" rather than "this row is hovered". */
+  --color-surface-hover:  rgba(255, 255, 255, 0.06);
+  --color-surface-active: rgba(255, 255, 255, 0.10);
+
+  /* Ink: near-white down to a disabled step that still clears the surface. */
+  --color-ink:          #e8ebf2;
+  --color-ink-muted:    #a8b0c4;
+  --color-ink-subtle:   #828ca6;
+  --color-ink-disabled: #4d5568;
+  --color-ink-inverse:  #0e1016;
+
+  /* Line: lighter than the surface it sits on. See note 1. */
+  --color-line:        #2b313d;
+  --color-line-strong: #3a4152;
+  --color-line-subtle: #1f242e;
+
+  /* Brand: the same hue, pushed lighter so it holds as text on a dark
+     surface. brand-fg inverts to near-black — 9.25:1 against this fill. */
+  --color-brand:        #4fd6c2;
+  --color-brand-hover:  #6ae0cf;
+  --color-brand-fg:     #06231f;
+  --color-brand-subtle: #10312d;
+  --color-brand-muted:  #17564e;
+  --color-brand-border: rgba(79, 214, 194, 0.32);
+  --color-brand-ring:   rgba(79, 214, 194, 0.24);
+  --color-brand-ink:    #7fe6d6;
+
+  /* Status: same three states, base at the LIGHT end so the dark label clears.
+     Each is the mirror of the light theme, where the base sat at the deep end
+     because the label was white. */
+  --color-danger:        #e8695f;
+  --color-danger-hover:  #f07a70;
+  --color-danger-fg:     #2a0d0b;
+  --color-danger-subtle: #331715;
+  --color-danger-border: #5c2723;
+  --color-danger-ink:    #f5a29b;
+
+  --color-success:        #3fbb87;
+  --color-success-hover:  #55cc9a;
+  --color-success-fg:     #05271a;
+  --color-success-subtle: #0f2f22;
+  --color-success-border: #1d4d38;
+  --color-success-ink:    #79d9ae;
+
+  --color-warning:        #d99034;
+  --color-warning-hover:  #e5a04d;
+  --color-warning-fg:     #2a1a04;
+  --color-warning-subtle: #30240f;
+  --color-warning-border: #55401a;
+  --color-warning-ink:    #f0c07a;
+
+  /* Inverse surface: a raised plane, not a white slab. A toast in dark mode
+     should still read as an object sitting above the page, which means lighter
+     than canvas — not brighter than everything else on screen. */
+  --color-inverse-surface: #232834;
+  --color-inverse-ink:    #e8ebf2;
+  --color-inverse-border: rgba(79, 214, 194, 0.24);
+
+  /* A dark scrim needs more weight than a light one to read as a layer. */
+  --color-scrim:      rgba(0, 0, 0, 0.72);
+  --color-brand-glow: rgba(79, 214, 194, 0.10);
+
+  /* The wordmark is the one element that inverts hard in dark. A teal wash
+     this faint is invisible against a near-black panel, so the fill goes to
+     solid white and the letters stop being a texture and become the light
+     source. The stroke stays brand: white fill under a teal outline is what
+     keeps the glyphs readable as drawn letters rather than a white smear. */
+  --color-wordmark-fill: #ffffff;
+  --color-wordmark-glow: rgba(255, 255, 255, 0.55);
+  --color-wordmark-from: #ffffff;
+  --color-wordmark-to: #7fe9d8;
+
+  /* Lighter here, not darker. On a near-black surface a dot can only separate
+     by being brighter than what is behind it, so the dark theme's step moves
+     in the opposite direction from the light theme's. */
+  --color-dot-grid: #4d5668;
+
+
+  /* Elevation: weaker, and the separation moves to the borders above. */
+  --shadow-raised:  0 1px 4px rgba(0, 0, 0, 0.40);
+  --shadow-overlay: 0 4px 20px rgba(0, 0, 0, 0.50);
+  --shadow-modal:   0 8px 24px rgba(0, 0, 0, 0.60);
+}
+
+/* Tailwind v4 inlines `--shadow-*` values into the shadow utilities at build
+   time. `shadow-raised` therefore kept the light colour in dark mode while the
+   token next to it said otherwise — confirmed in a browser, not guessed.
+
+   Colours do not have this problem: `bg-canvas` compiles to
+   `background-color: var(--color-canvas)`, so the whole dark block above works
+   without any of this. Shadows are the one namespace that resolves early.
+
+   Re-declaring them as real utilities keeps the var() reference, which is the
+   only reason a shadow can be themeable at runtime. If a fourth elevation is
+   added, it needs a line here too — that is the cost of this workaround. */
+@utility shadow-raised {
+  box-shadow: var(--shadow-raised);
+}
+@utility shadow-overlay {
+  box-shadow: var(--shadow-overlay);
+}
+@utility shadow-modal {
+  box-shadow: var(--shadow-modal);
+}
+
+@layer base {
+  html {
+    /* Tells the UA to render its own surfaces — scrollbars, form control
+       internals, the canvas behind the page — light. Without it a dark theme
+       gets light scrollbars and a white flash on overscroll. The dark block
+       above flips this to `dark`; nothing else has to think about it. */
+    color-scheme: light;
+    /* Cal Sans UI ships a GEOM axis (0 = humanist, 100 = strict geometric).
+       Left at 0: humanist forms are more readable at 13-15px, and strict
+       geometric is a large part of what makes generated UI look generated. */
+
+    /* Tabular figures everywhere, not just in tables. Sora's proportional
+       digits were the reason numbers visibly shifted as table values
+       updated. One rule, no per-component discipline required. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    height: 100%;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: 1.3846;
+  }
+
+  /* Display and hero faces are opt-in via their utilities, NOT applied to
+     every h1/h2. Radix renders DialogTitle as an <h2>, so a blanket heading
+     rule silently re-skins in-app components — which is exactly the drift
+     this system exists to prevent. */
+
+  ::selection {
+    background: var(--color-brand-muted);
+    color: var(--color-ink);
+  }
+
+  /* ── Autofill ─────────────────────────────────────────────────────────────
+     Chrome and Safari paint their own background on an autofilled field and
+     expose no property to change it. Left alone, a saved password renders as a
+     light box inside the dark form — the one place the theme visibly breaks,
+     and only for the people who use the form most.
+
+     Two tricks, both needed. The inset shadow is opaque and covers whatever
+     the browser painted, coloured from the token layer so it follows the
+     theme. The absurd transition stops the browser re-painting that background
+     a moment after page load, which would otherwise flash over the top of the
+     shadow; it only completes once the field is genuinely left behind.
+
+     The shadow inherits currentColor so an autofilled field in an error state
+     still reads as an error. -webkit-text-fill-color is required because the
+     browser overrides `color` on these elements. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--color-ink);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    caret-color: var(--color-ink);
+    transition: background-color 10000s ease-in-out 0s;
+  }
+
+  /* Firefox has no equivalent pseudo-class and no opaque background to hide,
+     so it needs nothing here — it already respects `color` and `background`. */
+}
+
+@layer components {
+  /* Cal Sans is variable 400-700, so headings may go semibold. */
+  .font-display {
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  /* One focus treatment for the whole system, on :focus-visible so it never
+     fires on mouse click. Outline rather than box-shadow, because box-shadow
+     rings vanish in Windows High Contrast Mode. */
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DEPRECATED — do not use in new code. Removed after the next major release.
+
+   Apps that copied the old globals.css reference these names. The failure mode
+   without this block is silent and nasty: `bg-primary` is not an error, it
+   simply stops resolving, so a button loses its background and text goes
+   black-on-black with no build failure and nothing in the console.
+
+   So the old names are re-declared here at their original values for one
+   release. `src/lib/deprecated-tokens.ts` warns in dev when one is used.
+
+   Three names CANNOT be aliased, because the new token took over the name
+   with a different value. These degrade rather than break — review them:
+
+     ink      was #4a5062 (secondary text), now #161b29 (primary).
+              `text-ink` renders darker than it used to.
+     surface  was #f7f8f9 (a quiet grey wash), now #ffffff (raised panels).
+              `bg-surface` renders white, so old hover fills and table heads
+              lose their distinction. Highest-risk item in this block.
+     sm/base/xs  the type scale was retuned, so `text-sm` is 13px not 14px,
+              `text-base` is 16px not 15px, `text-xs` is 12px not 13px.
+   ───────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-foreground: #161b29;
+  --color-secondary: #4a5068;
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #949cb2;
+  --color-muted-foreground: #949cb2;
+  --color-charcoal: #161b29;
+  --color-charcoal-soft: #2d3448;
+
+  --color-teal: #3cbfad;
+  --color-teal-light: #e8f8f6;
+  --color-teal-mid: #b2e8e2;
+  --color-teal-glow: rgba(60, 191, 173, 0.12);
+  --color-teal-border: rgba(60, 191, 173, 0.3);
+
+  --color-primary: #3cbfad;
+  --color-primary-deep: #34a895;
+  --color-primary-foreground: #ffffff;
+
+  --color-accent: #e8f8f6;
+  --color-accent-foreground: #3cbfad;
+
+  --color-destructive: #e05252;
+  --color-destructive-deep: #c94848;
+  --color-destructive-foreground: #ffffff;
+
+  /* Deepened from the originals on purpose: #22c48a and #f59e0b both failed
+     contrast as solid backgrounds with white text. */
+  --color-success: #178a60;
+  --color-warning: #f59e0b;
+  --color-warning-foreground: #ffffff;
+
+  --color-background: #f7f8f9;
+  --color-border: #e3e7ef;
+  --color-input: #e3e7ef;
+  --color-ring: #3cbfad;
+
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.3333;
+}
+
+/* Anything that asks for motion gets none. The animations above are named and
+   finite, so collapsing the duration is enough — no component has to know. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
