@@ -102,8 +102,13 @@ def list_members(team_id: uuid.UUID, db: Session = Depends(get_db), actor: Perso
 
     Who: an admin (any team) or that team's own manager. Anyone else gets 403 `forbidden`.
     Includes people who are no longer in the directory (inactive); they show as inactive.
+    Each person carries `open_task_count`, their tasks that are not Done (the remove dialog warns with it).
     """
-    return members.list_members(db, actor, team_id)
+    people = members.list_members(db, actor, team_id)
+    counts = members.open_task_counts(db, people)
+    return [
+        schemas.PersonResponse.model_validate(p).model_copy(update={"open_task_count": counts.get(p.id, 0)}) for p in people
+    ]
 
 
 @router.post("/{team_id}/members", response_model=schemas.PersonResponse, status_code=status.HTTP_201_CREATED)

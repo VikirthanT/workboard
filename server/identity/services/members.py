@@ -8,14 +8,14 @@ A reason is required from an admin and optional from a manager.
 """
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core.exceptions import AppError
 from identity import states
 from identity.services import audit
 from identity.services.lookup import get_person, get_team
-from models import ROLE_MANAGER, Person, Team
+from models import ROLE_MANAGER, Person, Task, Team
 from security.authorization import is_admin, require_team_access
 
 
@@ -31,6 +31,17 @@ def list_members(db: Session, actor: Person, team_id: uuid.UUID) -> list[Person]
         .order_by((Person.role == ROLE_MANAGER).desc(), Person.name)
     )
     return list(db.scalars(query).unique())
+
+
+def open_task_counts(db: Session, people: list[Person]) -> dict[uuid.UUID, int]:
+    """How many tasks each of these people holds that are not Done. One query; people with none are left out."""
+    return dict(
+        db.execute(
+            select(Task.assignee_id, func.count())
+            .where(Task.assignee_id.in_([p.id for p in people]), Task.status != "done")
+            .group_by(Task.assignee_id)
+        ).all()
+    )
 
 
 def get_member(db: Session, team_id: uuid.UUID, person_id: uuid.UUID) -> Person:

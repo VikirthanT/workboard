@@ -22,6 +22,8 @@ export interface WireIdentity {
   active: boolean;
   team_id: string | null;
   team_name: string | null;
+  /** Their tasks that are not Done. Only `GET /teams/{id}/members` fills it in. */
+  open_task_count?: number | null;
 }
 
 /** One line of the dev sign-in list (GET /dev/accounts, served only while the server runs with DEV_AUTH). */

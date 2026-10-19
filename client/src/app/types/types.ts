@@ -292,6 +292,8 @@ export interface PersonRecord extends Person {
   teamName: string | null;
   role: TeamRole;
   isAdmin: boolean;
+  /** Tasks they hold that are not Done; only known for people read from a team's member list. */
+  openTaskCount?: number | null;
 }
 
 /** One line of the access audit log. The names are looked up by the server; null when that person or team is gone. */

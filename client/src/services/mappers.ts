@@ -41,7 +41,7 @@ export const mapAllTeamsReport = (r: WireAllTeamsReport): AllTeamsReport => ({ a
 export const mapPerson = (p: WireIdentity): PersonRecord => ({
   id: p.id, displayName: p.name, email: p.email, slackUserId: p.slack_user_id,
   teamId: p.team_id, teamName: p.team_name, active: p.active,
-  role: p.role === 'manager' ? 'manager' : 'member', isAdmin: p.is_admin,
+  role: p.role === 'manager' ? 'manager' : 'member', isAdmin: p.is_admin, openTaskCount: p.open_task_count ?? null,
 });
 
 export const mapTeam = (t: WireTeam): TeamRecord => ({

@@ -30,6 +30,8 @@ class PersonResponse(BaseModel):
     active: bool
     team_id: uuid.UUID | None
     team_name: str | None
+    # Tasks assigned to them that are not Done. Only the team members list fills it in; everywhere else it is null.
+    open_task_count: int | None = None
 
 
 class DevAccount(BaseModel):

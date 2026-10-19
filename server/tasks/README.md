@@ -64,6 +64,5 @@ Shared code used here, kept outside the feature: `server/models/tasks.py` (`Task
 ## Not built yet
 
 - Slack: `accepted_at` on tasks and the comment `source = slack` exist, nothing writes them (Phase 2).
-- An open-task count per person (for the "remove from team" warning) and per team (for the admin's team dropdown): no endpoint yet.
-
+- An open-task count per person is done (`open_task_count` on `GET /teams/{id}/members`, see `server/identity/README.md`; it lives in identity because the members list is identity's).
 Tests: `server/tests/README.md`.

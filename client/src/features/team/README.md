@@ -9,7 +9,7 @@ A team's people: the people from the directory (name, email, Slack ID) a manager
 | `GET /api/teams/{id}/members` | `services/teams.ts` `getTeamMembers`, `hooks/useTeam.ts` `useTeamMembers` | The team's people, manager first |
 | `GET /api/people?unassigned=true&q=&limit=50` | `searchUnassignedPeople`, `useUnassignedPeople`, `AddMemberDialog.tsx` | Active directory people on no team, searched on the server |
 | `POST /api/teams/{id}/members` | `addMember`, `useAddMember` | Add a person (reason optional, audited) |
-| `DELETE /api/teams/{id}/members/{personId}` | `removeMember`, `RemoveMemberDialog.tsx` | Take them off the team (reason optional for a manager, audited); their open tasks stay and show as needing a new owner |
+| `DELETE /api/teams/{id}/members/{personId}` | `removeMember`, `RemoveMemberDialog.tsx` | Take them off the team (reason optional for a manager, audited); their open tasks stay and show as needing a new owner. The dialog says how many, from `openTaskCount` on the person (`GET /teams/{id}/members` sends `open_task_count`; unknown elsewhere, then it uses the general sentence) |
 
 There is no Active / Inactive switch on a person any more: a person is added or removed.
 

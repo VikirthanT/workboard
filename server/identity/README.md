@@ -18,7 +18,7 @@ Rules in one paragraph: the directory (people) comes from Slack. A person has a 
 | `POST /api/teams` | admin | `routers/teams.py` | Create a team. Body `{name, initial_manager_person_id, reason}`. The person becomes manager. Returns 201. |
 | `DELETE /api/teams/{id}` | admin | `routers/teams.py` | Delete a team for good. Body `{confirm_name, reason}`. Members go back to no team; the manager returns to member. Returns 204. |
 | `PATCH /api/teams/{id}/manager` | admin | `routers/teams.py` | Make another person the manager; the old one becomes a member and stays on the team. Body `{person_id, reason}`. |
-| `GET /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | People on the team, manager first. |
+| `GET /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | People on the team, manager first. Each person carries `open_task_count`: the tasks assigned to them that are not Done (one grouped query, `members.open_task_counts`). It is `null` on every other endpoint that returns a person. The remove dialog warns with it. |
 | `POST /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | Add a person who is on no team. Body `{person_id, reason}`; the reason is optional. Returns 201. |
 | `DELETE /api/teams/{id}/members/{person_id}` | admin, or that team's manager | `routers/teams.py` | Take a person off the team (the dustbin). Optional body `{reason}`. The manager cannot be removed. Returns 204. |
 

@@ -4,6 +4,13 @@ import { errorMessage } from '../../services/api';
 import { ReasonFormDialog } from './ReasonFormDialog';
 import { useRemoveMember } from './hooks';
 
+/** The warning in the dialog: how many tasks will need a new owner (the count is unknown outside a member list). */
+function openTasksText({ displayName, openTaskCount: n }: PersonRecord): string {
+  if (n === 0) return `${displayName} has no open tasks.`;
+  if (n == null) return 'Their open tasks stay on the board and show as needing a new owner.';
+  return `${displayName} has ${n} open ${n === 1 ? 'task' : 'tasks'}, which will stay on the board and show as needing a new owner.`;
+}
+
 /**
  * Take a person off a team (the dustbin). Render it only while someone is being removed. A manager need not give a
  * reason; an admin must, and the server says so if it is missing.
@@ -32,7 +39,7 @@ export function RemoveMemberDialog({ team, person, reasonOptional, onClose }: {
       }
     >
       <p className="text-base text-ink-muted">
-        They go back to the directory and can join another team. Their open tasks stay on the board and show as needing a new owner.
+        They go back to the directory and can join another team. {openTasksText(person)}
       </p>
     </ReasonFormDialog>
   );

@@ -2,7 +2,7 @@
    The payloads are synthetic. If the server's shape changes, this is where the client finds out. */
 import { describe, expect, it } from 'vitest';
 import type { WireActivity, WireBoardTeam, WireIdentity, WireTask } from './backendTypes';
-import { mapActivity, mapBoardTeam, mapRealMe, mapTask, runsTeam } from './mappers';
+import { mapActivity, mapBoardTeam, mapPerson, mapRealMe, mapTask, runsTeam } from './mappers';
 
 const ravi = { id: 'p-ravi', name: 'Ravi', email: 'ravi@atimotors.com', active: true };
 const asha = { id: 'p-asha', name: 'Asha', email: 'asha@atimotors.com', active: true };
@@ -99,6 +99,13 @@ describe('Me from the real API (GET /me + the team + the board)', () => {
     const both = person({ ...manager, is_admin: true });
 
     expect(mapRealMe(both, [both], { tasks: [] })).toMatchObject({ isAdmin: true, isManager: true, team: { name: 'NPI' } });
+  });
+
+  it('the open-task count comes through when the server sends it, and is null when it does not', () => {
+    expect(mapPerson(person({ open_task_count: 3 })).openTaskCount).toBe(3);
+    expect(mapPerson(person({ open_task_count: 0 })).openTaskCount).toBe(0);
+    expect(mapPerson(person({})).openTaskCount).toBeNull();
+    expect(mapPerson(person({ open_task_count: null })).openTaskCount).toBeNull();
   });
 
   it('an inactive manager or a plain member runs nothing', () => {

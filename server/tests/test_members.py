@@ -83,6 +83,36 @@ def test_the_manager_cannot_be_removed(directory, admin):
     assert blocked.json()["detail"]["code"] == "is_manager"
 
 
+def test_the_members_list_counts_each_persons_open_tasks_for_the_remove_warning(directory, admin):
+    asha, ravi, zoe = directory.person("Asha"), directory.person("Ravi"), directory.person("Zoe")
+    team = make_team(directory, admin, "NPI", asha)
+    for person in (ravi, zoe):
+        directory.call(asha, "POST", f"/teams/{team['id']}/members", json={"person_id": str(person.id)})
+
+    def task(assignee):
+        res = directory.call(asha, "POST", "/tasks", json={"title": "t", "assignee_id": str(assignee.id)})
+        assert res.status_code == 201, res.text
+        return res.json()["id"]
+
+    task(ravi)                                   # to do: open
+    started = task(ravi)
+    directory.call(asha, "POST", f"/tasks/{started}/status", json={"to": "in_progress"})  # in progress: open
+    finished = task(ravi)
+    for to in ("in_progress", "review", "done"):  # done: not counted
+        assert directory.call(asha, "POST", f"/tasks/{finished}/status", json={"to": to, "note": "ok"}).status_code == 200
+    task(asha)                                   # the manager is an assignee too
+
+    other = directory.person("Omar")
+    make_team(directory, admin, "QA", other)
+    task_on_other = directory.call(other, "POST", "/tasks", json={"title": "t", "assignee_id": str(other.id)})
+    assert task_on_other.status_code == 201      # another team's task must not leak into NPI's counts
+
+    people = directory.call(asha, "GET", f"/teams/{team['id']}/members").json()
+    assert {p["name"]: p["open_task_count"] for p in people} == {"Asha": 1, "Ravi": 2, "Zoe": 0}
+    assert directory.call(asha, "GET", "/me").json()["open_task_count"] is None  # only the members list fills it in
+    assert all(p["open_task_count"] is None for p in directory.call(admin, "GET", "/people").json()["items"])
+
+
 def test_the_activate_route_is_gone(directory, admin):
     asha, ravi = directory.person("Asha"), directory.person("Ravi")
     team = make_team(directory, admin, "NPI", asha)
