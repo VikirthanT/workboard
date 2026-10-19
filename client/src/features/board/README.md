@@ -14,7 +14,7 @@ The board opens on **all tasks**; "Needs attention" (with its count) is a tick t
 |---|---|---|
 | `GET /board?team=` | `services/tasks.ts` `getBoard`, `hooks/useBoard.ts` | The team's cards, stats, filter counts, attention count, tasks needing a new owner, `read_only`. `team` is for admins; a manager is refused another team |
 | `GET /reports/team?team=` | `services/reports.ts`, `hooks/useTeamReport.ts` | Per-person and total numbers, all time and for a period (same team rule) |
-| `POST /tasks` | `createTask`, `TaskFormDialog.tsx` | New manual task |
+| `POST /tasks` | `createTask`, `TaskFormDialog.tsx` | New manual task. The Add task / Save changes button stays disabled until the title is filled and, when the assignee can be picked, an assignee is chosen (both show a red star) |
 | `GET /tasks/:id` | `getTask`, `hooks/useBoard.ts` `useTask` | Task and its timeline |
 | `PATCH /tasks/:id` | `updateTask` | Edit or reassign |
 | `DELETE /tasks/:id` | `deleteTask` | Only while To Do / In Progress |

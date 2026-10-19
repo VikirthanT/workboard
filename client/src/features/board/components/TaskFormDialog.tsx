@@ -23,6 +23,8 @@ interface Props {
 
 const EMPTY = { title: '', description: '', priority: 'medium' as TaskInput['priority'], dueAt: '', assigneeId: '' };
 
+const Required = () => <><span aria-hidden className="text-danger"> *</span><span className="sr-only"> (required)</span></>;
+
 /** Create / edit. The assignee is always someone on the manager's team. */
 export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: Props) {
   const create = useCreateTask();
@@ -44,9 +46,12 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
   const busy = create.isPending || update.isPending;
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setF((s) => ({ ...s, [k]: v }));
 
+  // Title is required; so is an assignee whenever the form offers the picker (the button stays disabled until both are set).
+  const ready = !!f.title.trim() && (!canPickAssignee || !!f.assigneeId);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!f.title.trim()) return setError('Give the task a title.');
+    if (!ready) return;
     const input: TaskInput = { title: f.title.trim(), description: f.description, priority: f.priority, dueAt: f.dueAt || null, assigneeId: f.assigneeId };
     const done = { onSuccess: (t: Task) => onClose(t), onError: (err: unknown) => setError(errorMessage(err)) };
     if (task) update.mutate({ id: task.id, patch: canPickAssignee ? input : { ...input, assigneeId: undefined } }, done);
@@ -67,7 +72,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
           </DialogHeader>
           <DialogBody className="flex flex-col gap-4">
             <div>
-              <Label htmlFor="task-title">Title</Label>
+              <Label htmlFor="task-title">Title<Required /></Label>
               <Input id="task-title" className="mt-2" autoFocus value={f.title} onChange={(e) => set('title', e.target.value)} maxLength={140} />
             </div>
             <div>
@@ -76,7 +81,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
             </div>
             {canPickAssignee && (
               <div>
-                <Label htmlFor="task-assignee">Assignee</Label>
+                <Label htmlFor="task-assignee">Assignee<Required /></Label>
                 <Select value={f.assigneeId} onValueChange={(v) => set('assigneeId', v)}>
                   <SelectTrigger id="task-assignee" className="mt-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -104,7 +109,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => onClose()}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{task ? 'Save changes' : 'Add task'}</Button>
+            <Button type="submit" disabled={busy || !ready}>{task ? 'Save changes' : 'Add task'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
