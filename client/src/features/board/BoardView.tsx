@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ChartBar, Eye, Plus, UsersThree } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../../app/components/ErrorBoundary';
 import { PageLoading } from '../../app/components/PageLoading';
@@ -10,6 +10,7 @@ import { CheckboxField } from '../../app/components/ui/checkbox';
 import { EmptyState } from '../../app/components/ui/empty-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../app/components/ui/select';
 import { useToast } from '../../app/components/ui/toast';
+import { slugify } from '../../app/lib/slug';
 import { STATUS_LABEL, type BoardFilter, type Me, type Task, type TeamRecord, type Transition } from '../../app/types/types';
 import { useCurrentUser } from '../../hooks';
 import { errorMessage } from '../../services/api';
@@ -51,26 +52,27 @@ export function BoardView({ adminView = false }: { adminView?: boolean }) {
 /** Admin only: pick a team (the `?team=` URL param remembers it) and read its board. No actions. */
 function AdminBoards({ me }: { me: Me }) {
   const teams = useTeams(true);
-  const [params] = useSearchParams();
-  const asked = params.get('team');
+  const asked = useParams().team;
   if (teams.isError) return <div className="mx-auto max-w-[720px] p-8"><Alert variant="danger" title="Could not load teams">{errorMessage(teams.error)}</Alert></div>;
   if (!teams.data) return <PageLoading label="Loading teams…" />;
   if (teams.data.length === 0) {
     return <div className="mx-auto max-w-[720px] p-8"><EmptyState icon={UsersThree} title="No teams yet" description="Create a team in the Teams portal first." /></div>;
   }
-  if (!asked || !teams.data.some((t) => t.id === asked)) {
+  const team = teams.data.find((t) => slugify(t.name) === asked);
+  if (!team) {
     // Their own team if they run one, else the first team.
     const pick = teams.data.find((t) => t.id === me.team?.id) ?? teams.data[0];
-    return <Navigate to={`/boards?team=${pick.id}`} replace />;
+    return <Navigate to={`/boards/${slugify(pick.name)}`} replace />;
   }
-  return <BoardInner me={me} teams={teams.data} />;
+  return <BoardInner key={team.id} me={me} teams={teams.data} teamId={team.id} />;
 }
 
 /** "NPI (Asha Rao)": the team, then the manager who runs it. */
 const teamOption = (t: TeamRecord) => `${t.name} (${t.manager?.displayName ?? 'No manager'})`;
 
-function BoardInner({ me, teams }: { me: Me; teams?: TeamRecord[] }) {
-  const p = useBoardParams();
+function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamId?: string }) {
+  const p = useBoardParams(teamId);
+  const navigate = useNavigate();
   const board = useBoard(p.query);
   const move = useMoveTask();
   const { toast } = useToast();
@@ -150,7 +152,7 @@ function BoardInner({ me, teams }: { me: Me; teams?: TeamRecord[] }) {
         <div className="flex flex-wrap items-center gap-2">
           {teams && (
             <div className="w-[300px]">
-              <Select value={board.data.team.id} onValueChange={p.setTeam}>
+              <Select value={board.data.team.id} onValueChange={(id) => navigate(`/boards/${slugify(teams.find((t) => t.id === id)?.name ?? '')}`)}>
                 <SelectTrigger aria-label="Team" className="py-2"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {teams.map((t) => <SelectItem key={t.id} value={t.id}>{teamOption(t)}</SelectItem>)}

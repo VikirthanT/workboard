@@ -2,9 +2,9 @@
 
 The manager's board for their one team: five columns (To Do, In Progress, Blocked, Review, Done), task detail with comments and an append-only timeline, create / edit, reasons for Blocked / send back / reopen / move back, remarks to close, and a team report. With no team the page shows `NoTeamPage` (from `features/team`); an admin who runs no team is sent on to `/boards`. `/` (the logo) is the home page for every role and is always a Kanban board; there is no redirect to the Teams portal or My team.
 
-The board opens on **all tasks**; "Needs attention" (with its count) is a tick that narrows the cards, and is kept in the URL as `?attention=1` only when on.
+The board opens on **all tasks**; "Needs attention" (with its count) is a tick that narrows the cards. The tick, person, filters and open task are not in the URL: `hooks/useBoardParams.ts` keeps them per team in `sessionStorage`, so a refresh or a visit to another page restores them (until the tab closes).
 
-**Admin read-only view** (`/boards?team=<id>`, `BoardView adminView`): a team dropdown (every team, "Team (Manager name)"), a "Read-only view of <team>" line, no Add task button, no dragging and no edit actions. An admin can comment on any task that is not Done (the API sends `can_comment: true` for them). The API sends `read_only: true` and the `actions`; the UI only reads them. An admin who runs a team has full actions on that team only and opens that board by default.
+**Admin read-only view** (`/boards/<team-name>`, e.g. `/boards/npi`, `BoardView adminView`): a team dropdown (every team, "Team (Manager name)"), a "Read-only view of <team>" line, no Add task button, no dragging and no edit actions. An admin can comment on any task that is not Done (the API sends `can_comment: true` for them). The API sends `read_only: true` and the `actions`; the UI only reads them. An admin who runs a team has full actions on that team only and opens that board by default.
 
 **How a card moves:** by dragging. The detail sheet has one status button, Resume, on a blocked task. A Done task cannot be edited (the sheet says so); reopen it first. A due date cannot be in the past (the picker greys those days out and the server refuses them). In the person filter the signed-in manager appears as "Name (You)".
 

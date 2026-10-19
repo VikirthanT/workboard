@@ -37,12 +37,13 @@ View -> feature hook (`useQuery` / `useMutation`) -> `services/api` -> `apiClien
 ```
 /login                public
 /                     team board   (home for everyone, always a Kanban board; no team: "No team yet" page; an admin who runs no team: redirect to /boards)
-/boards               Any team's board, read-only (admin; `?team=<id>`, defaults to the admin's own team, else the first team with open tasks; others go to /)
+/boards               Redirects to /boards/<team-name> (admin; the admin's own team, else the first team; others go to /)
+/boards/:team         Any team's board, read-only (admin; `:team` is the team name as a slug, e.g. /boards/npi)
 /team                 My team: the people a manager assigns work to (manager)
 /admin                Teams portal (admin; the view itself shows "Admins only" to anyone else)
 ```
 
-All sit under the AppShell guard. Board state (team for admins, `attention=1` when the needs-attention tick is on, person, filters, open task) lives in the URL query string (`useBoardParams`), so the header badge deep-links (`/?filter=needs_review`), a link can open a task (`/?task=<id>`), and a refresh keeps the view.
+All sit under the AppShell guard. The URL is only the page: `/`, `/team`, `/admin`, `/boards/npi` (the admin's team as a name slug, `app/lib/slug.ts`). No ids, no filters. The board's view (Needs attention tick, person, filters, open task) is kept per team in `sessionStorage` (`wb_board:<team>`, `useBoardParams`), so a refresh or a trip to another page brings it back; it ends with the tab. The one exception is the header's "Needs review" link, `/?filter=needs_review`, applied once and then dropped from the URL. Nothing in the URL grants access: the server checks every request.
 
 ## Deviations from the template
 

@@ -14,6 +14,7 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<BoardView />} />
         <Route path="boards" element={<BoardView adminView />} />
+        <Route path="boards/:team" element={<BoardView adminView />} />
         <Route path="team" element={<TeamView />} />
         <Route path="admin" element={<TeamsView />} />
       </Route>

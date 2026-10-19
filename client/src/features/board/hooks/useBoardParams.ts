@@ -1,53 +1,68 @@
-import { useCallback, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { BoardFilter, BoardQuery } from '../../../app/types/types';
 
 const FILTERS: BoardFilter[] = ['overdue', 'due_week', 'blocked', 'needs_review'];
 
+interface View {
+  attention: boolean;
+  personId: string | null;
+  filters: BoardFilter[];
+  taskId: string | null;
+}
+
+const EMPTY: View = { attention: false, personId: null, filters: [], taskId: null };
+
+function load(key: string): View {
+  try {
+    const v = { ...EMPTY, ...JSON.parse(sessionStorage.getItem(key) ?? '{}') };
+    return { ...v, filters: v.filters.filter((f: BoardFilter) => FILTERS.includes(f)) };
+  } catch {
+    return EMPTY;
+  }
+}
+
 /**
- * Board state lives in the URL, so the header's review badge can deep-link
- * ("/?filter=needs_review"), a link can open a task ("/?task=..."), and a refresh keeps your view.
+ * The URL is only the page (`/`, `/boards/npi`): no ids, no filters. The view (attention tick, person, filters, open task)
+ * is kept per team in sessionStorage, so a refresh or a trip to another page brings it back; it ends with the tab.
+ * The header's "Needs review" link is the one exception: `/?filter=needs_review` is applied once, then dropped from the URL.
+ * Nothing here grants access: the server checks every request.
  */
-export function useBoardParams() {
+export function useBoardParams(teamId: string | null = null) {
+  const key = `wb_board:${teamId ?? 'own'}`;
+  const [view, setView] = useState<View>(() => load(key));
   const [params, setParams] = useSearchParams();
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(view));
+    } catch {
+      /* storage blocked: the view just won't survive a refresh */
+    }
+  }, [key, view]);
+
+  useEffect(() => {
+    const f = params.get('filter');
+    if (!f) return;
+    setView((v) => ({ ...v, filters: FILTERS.includes(f as BoardFilter) ? [f as BoardFilter] : v.filters }));
+    setParams({}, { replace: true });
+  }, [params, setParams]);
+
+  const patch = (changes: Partial<View>) => setView((v) => ({ ...v, ...changes }));
+
+  // Admins pick a team (the `/boards/<team-name>` path, resolved by the caller); for a manager the server always answers with their own.
   const query: BoardQuery = useMemo(
-    () => ({
-      // Admins pick a team; for a manager the server always answers with their own.
-      teamId: params.get('team'),
-      // The board opens on every task; "Needs attention" (?attention=1) narrows the cards.
-      attention: params.get('attention') === '1',
-      personId: params.get('person'),
-      filters: (params.get('filter') ?? '').split(',').filter((f): f is BoardFilter => FILTERS.includes(f as BoardFilter)),
-    }),
-    [params],
-  );
-
-  const taskId = params.get('task');
-
-  const patch = useCallback(
-    (changes: Record<string, string | null>, replace = true) =>
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          Object.entries(changes).forEach(([k, v]) => (v === null || v === '' ? next.delete(k) : next.set(k, v)));
-          return next;
-        },
-        { replace },
-      ),
-    [setParams],
+    () => ({ teamId, attention: view.attention, personId: view.personId, filters: view.filters }),
+    [teamId, view.attention, view.personId, view.filters],
   );
 
   return {
     query,
-    taskId,
-    /** Switching team drops the person, filters and open task, which belong to the old team. */
-    setTeam: (id: string) => patch({ team: id, person: null, filter: null, task: null }),
-    setAttention: (on: boolean) => patch({ attention: on ? '1' : null }),
-    setPerson: (id: string | null) => patch({ person: id }),
-    toggleFilter: (f: BoardFilter) =>
-      patch({ filter: (query.filters.includes(f) ? query.filters.filter((x) => x !== f) : [...query.filters, f]).join(',') || null }),
-    clearFilters: () => patch({ filter: null }),
-    openTask: (id: string | null) => patch({ task: id }, false),
+    taskId: view.taskId,
+    setAttention: (attention: boolean) => patch({ attention }),
+    setPerson: (personId: string | null) => patch({ personId }),
+    toggleFilter: (f: BoardFilter) => patch({ filters: view.filters.includes(f) ? view.filters.filter((x) => x !== f) : [...view.filters, f] }),
+    clearFilters: () => patch({ filters: [] }),
+    openTask: (taskId: string | null) => patch({ taskId }),
   };
 }
