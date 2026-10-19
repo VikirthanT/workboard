@@ -1,4 +1,4 @@
-"""Tests run against their own database (workboard_test) built by the real Alembic migrations,
+"""Tests run against their own database (workboard_test_<pid>, one per run) built by the real Alembic migrations,
 so a passing suite also proves the migrations produce a working schema."""
 import os
 from pathlib import Path
@@ -10,11 +10,13 @@ from sqlalchemy.engine import make_url
 if "DATABASE_URL" not in os.environ:
     pytest.exit(
         "DATABASE_URL is not set. Run the tests with `make server-test` (it loads .env, see .env.example). "
-        "They use that server but their own database, workboard_test.",
+        "They use that server but their own database, workboard_test_<pid>.",
         returncode=2,
     )
 BASE_URL = make_url(os.environ["DATABASE_URL"])
-TEST_DB = "workboard_test"
+# One database per run (named by the process id), so two runs at once, say `make test` in two terminals, never drop or
+# truncate each other's tables.
+TEST_DB = f"workboard_test_{os.getpid()}"
 TEST_URL = BASE_URL.set(database=TEST_DB)
 
 # Must be set before anything imports core.config.
@@ -50,6 +52,10 @@ def _database():
     config.set_main_option("script_location", str(server_dir / "migrations"))
     command.upgrade(config, "head")
     yield
+    # The run's own database goes when the run ends. A run that was killed leaves its database behind; the next run
+    # does not touch it (see the tests README for the one-line cleanup).
+    with admin.connect() as conn:
+        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)"))
 
 
 @pytest.fixture(autouse=True)

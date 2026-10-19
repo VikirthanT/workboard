@@ -14,7 +14,7 @@ cd server
 ```
 
 - Needs the dev database up: `make db-up` from the repo root. Run the tests with `make server-test`, which loads `.env` (the password is `POSTGRES_PASSWORD`).
-- The suite drops and recreates its own database, `workboard_test`, and builds it by running the real Alembic migrations. So a green run also shows the migrations produce a working schema. The development database is never touched.
+- Each run creates its own database, `workboard_test_<pid>` (the process id), builds it by running the real Alembic migrations, and drops it at the end. So a green run also shows the migrations produce a working schema, two runs at once cannot disturb each other, and the development database is never touched. A run that was killed leaves its database behind; remove strays with `docker exec <db container> psql -U <user> -d postgres -c "DROP DATABASE workboard_test_<pid>"` (list them with `\l`).
 - `DEV_AUTH=true` is set by `conftest.py`, so tests act as a person by sending the `X-Dev-User-Email` header.
 - People in tests are synthetic (`asha@atimotors.com`, ...). No row from the real directory is used.
 

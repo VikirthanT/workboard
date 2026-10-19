@@ -83,7 +83,7 @@ typecheck:
 	cd client && npm run typecheck
 
 # Every test: the frontend's unit tests, then the server's. The server tests need the dev database and the venv,
-# so they are set up first; they use their own database (workboard_test), never your dev data.
+# so they are set up first; they use their own database (workboard_test_<pid>), never your dev data.
 test: server/.venv/bin/uvicorn db-up
 	@$(LOAD_ENV) python3 scripts/test_all.py
 
