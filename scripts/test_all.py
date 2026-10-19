@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the repo's tests and print one summary.   (make test, make client-test, make server-test)
 
-    python3 scripts/test_all.py [frontend] [server]      (no argument: both)
+    python3 scripts/test_all.py [frontend] [server] [bundle] [e2e]   (no argument: all but e2e, see make e2e)
 
 Every test prints its name, PASSED / FAILED and how far through its suite it is. The table at the end gives
 passed, failed and skipped with the percentage that passed, per suite and overall, and lists what failed.
@@ -118,7 +118,55 @@ def bundle(tmp: Path) -> Result:
     return result
 
 
-SUITES = {"frontend": frontend, "server": server, "bundle": bundle}
+def e2e(tmp: Path) -> Result:
+    """Playwright against a real API and Vite dev server, on a throwaway database holding the demo world."""
+    venv = ROOT / "server" / ".venv" / "bin"
+    result = Result("End to end (playwright)")
+    if "DATABASE_URL" not in os.environ:
+        result.errors = 1
+        result.failures.append("DATABASE_URL is not set: run it with make e2e")
+        return result
+    env = {**os.environ, "WB_E2E_RUN": str(os.getpid())}
+    db = subprocess.run([str(venv / "python"), str(ROOT / "scripts" / "e2e_db.py"), "create"], env=env, capture_output=True, text=True)
+    if db.returncode != 0:
+        result.errors = 1
+        result.failures.append("could not create the end-to-end database (is the dev database up? make db-up)")
+        return result
+    env = {**env, "DATABASE_URL": db.stdout.strip(), "DEV_AUTH": "true", "WB_E2E_JSON": str(tmp / "e2e.json")}
+    try:
+        for step in ([str(venv / "alembic"), "upgrade", "head"], [str(venv / "python"), str(ROOT / "seed" / "demo_db.py")]):
+            setup = subprocess.run(step, env=env, cwd=ROOT / "server" if step[0].endswith("alembic") else ROOT, capture_output=True, text=True)
+            if setup.returncode != 0:
+                result.errors = 1
+                result.failures.append(f"{Path(step[-1]).name} failed:\n{setup.stderr[-500:]}")
+                return result
+        subprocess.run(["npx", "playwright", "test"], cwd=ROOT / "client", env=env)
+    finally:
+        subprocess.run([str(venv / "python"), str(ROOT / "scripts" / "e2e_db.py"), "drop"], env=os.environ | {"WB_E2E_RUN": str(os.getpid())}, capture_output=True)
+
+    report = tmp / "e2e.json"
+    if not report.exists():
+        result.errors = 1  # Playwright stopped before it could write anything, e.g. a server did not start
+        return result
+    stats = json.loads(report.read_text())["stats"]
+    result.passed, result.failed, result.skipped = stats["expected"] + stats["flaky"], stats["unexpected"], stats["skipped"]
+    for suite in json.loads(report.read_text())["suites"]:
+        for spec in suite.get("specs", []):
+            if not spec["ok"]:
+                result.failures.append(f"{suite['title']}::{spec['title']}")
+    return result
+
+
+# `e2e` needs a browser, two servers and a database, so it is not in the default run: make e2e (or test_all.py e2e).
+SUITES = {"frontend": frontend, "server": server, "bundle": bundle, "e2e": e2e}
+DEFAULT_SUITES = ["frontend", "server", "bundle"]
+# Three groups, in the run and in the summary: Frontend, Backend, Other (checks that are not unit tests).
+BANNERS = {
+    "frontend": "FRONTEND TESTS (vitest)",
+    "server": "BACKEND TESTS (pytest)",
+    "bundle": "OTHER CHECKS (production bundle)",
+    "e2e": "END-TO-END TESTS (playwright)",
+}
 
 
 def percent(part: int, whole: int) -> str:
@@ -151,7 +199,7 @@ def total_of(results: list[Result]) -> Result:
 
 
 def main(argv: list[str]) -> int:
-    wanted = argv or list(SUITES)
+    wanted = argv or DEFAULT_SUITES
     unknown = [w for w in wanted if w not in SUITES]
     if unknown:
         print(f"Unknown suite: {', '.join(unknown)}. Choose from: {', '.join(SUITES)}.", file=sys.stderr)
@@ -159,7 +207,7 @@ def main(argv: list[str]) -> int:
     results = []
     with tempfile.TemporaryDirectory() as tmp:
         for key in wanted:
-            banner({"frontend": "FRONTEND TESTS (vitest)", "server": "SERVER TESTS (pytest)"}.get(key, key.upper()))
+            banner(BANNERS[key])
             results.append(SUITES[key](Path(tmp)))
     summary(results)
     return 0 if all(r.ok for r in results) else 1

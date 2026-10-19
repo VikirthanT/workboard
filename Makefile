@@ -20,7 +20,7 @@ PEOPLE_PATH = f="$${PEOPLE_FILE:-seed/people.json}"; [ ! -d "$$f" ] || f="$$f/pe
 NO_PEOPLE = echo "NOTE: $$f not found, so no people were loaded. Set PEOPLE_FILE in .env (see .env.example), or make the file with seed/csv_to_people.py."
 
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
-        server-install db-up db-down db-migrate db-seed db-demo db-demo-reset db-demo-remove api-dev server-test server-cov \
+        server-install db-up db-down db-migrate db-seed db-demo db-demo-reset db-demo-remove api-dev server-test server-cov e2e \
         prod-up prod-load-people prod-down prod-logs
 
 help:
@@ -40,6 +40,7 @@ help:
 	@echo "make api-dev         run the API on :8000 with the dev sign-in stub (DEV_AUTH=true, local only)"
 	@echo "make server-test     run only the server tests (own test database)"
 	@echo "make server-cov      the server tests plus a coverage table with the uncovered lines"
+	@echo "make e2e             Playwright smoke tests in a browser, on a throwaway database with the demo world (not part of make test)"
 	@echo ""
 	@echo "Production (docker-compose.yml: database + API; no seeds, no dev sign-in):"
 	@echo "make prod-up    build and start the stack (migrations run on start), then load PEOPLE_FILE if it exists"
@@ -125,6 +126,11 @@ api-dev:
 
 server-test:
 	@$(LOAD_ENV) python3 scripts/test_all.py server
+
+# Playwright smoke tests: the real API and Vite on ports 8100 / 5174, on a throwaway database with the demo world
+# (dropped afterwards). Needs the dev database up and a browser: cd client && npx playwright install chromium (once).
+e2e: server/.venv/bin/uvicorn db-up
+	@$(LOAD_ENV) python3 scripts/test_all.py e2e
 
 # Server tests with a coverage table of the app code and the lines no test reaches (settings: server/.coveragerc).
 server-cov:
