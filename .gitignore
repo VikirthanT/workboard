@@ -7,6 +7,9 @@ seed/people.json
 __pycache__/
 .venv/
 .pytest_cache/
+.coverage
+test-results/
+playwright-report/
 refdocs/
 deliverables/
 .gstack/

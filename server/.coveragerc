@@ -1,0 +1,10 @@
+[run]
+source = .
+branch = True
+omit =
+    tests/*
+    .venv/*
+    migrations/*
+
+[report]
+skip_empty = True

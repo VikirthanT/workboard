@@ -12,6 +12,7 @@ make db-migrate                          # Alembic migrations
 make db-seed                             # PEOPLE_FILE (default seed/people.json) + first admin (BOOTSTRAP_ADMIN_EMAILS from .env); skipped with a note if the file is missing
 make api-dev                             # API on :8000, dev sign-in stub on
 make server-test                         # tests (use their own database)
+make server-cov                          # the same tests plus a coverage table with the uncovered lines (server/.coveragerc)
 
 # Production (docker-compose.yml: database + API; migrations run on start; no seeds, no dev sign-in)
 make prod-up                             # build, start, then load PEOPLE_FILE if present; make prod-down / prod-logs
