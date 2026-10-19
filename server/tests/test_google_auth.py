@@ -185,7 +185,7 @@ def test_an_expired_code_is_refused(directory, monkeypatch, asha, db):
     assert exchange(directory, code).status_code == 400
 
 
-@pytest.mark.parametrize("code", ["nonsense", "x" * 200, "' OR 1=1 --"])
+@pytest.mark.parametrize("code", ["nonsense", "x" * 200, "' OR 1=1 --"], ids=["nonsense", "200 characters", "sql injection"])
 def test_a_code_that_was_never_issued_is_refused(directory, code):
     res = exchange(directory, code)
 

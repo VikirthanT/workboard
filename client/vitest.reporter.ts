@@ -26,7 +26,10 @@ export default class ProgressReporter implements Reporter {
 
     const percent = this.total ? `[${String(Math.min(100, Math.floor((this.done / this.total) * 100))).padStart(3)}%]` : '';
     const tag = COLOR ? `${COLOR[state]}${state}${COLOR.reset}` : state;
-    console.log(`${name} ${tag} ${percent}`.trimEnd());
+    // Right-aligned like `pytest -v`: the percentage ends at the terminal's last column (80 when piped).
+    const left = `${name} ${tag}`;
+    const gap = Math.max(1, (process.stdout.columns || 80) - (name.length + 1 + state.length) - percent.length);
+    console.log(percent ? `${left}${' '.repeat(gap)}${percent}` : left);
   }
 
   onTestRunEnd(modules: ReadonlyArray<TestModule>, unhandledErrors: ReadonlyArray<unknown>) {

@@ -79,7 +79,7 @@ def server(tmp: Path) -> Result:
     pytest = ROOT / "server" / ".venv" / "bin" / "pytest"
     code = subprocess.run([str(pytest), "-v", f"--junitxml={junit}"], cwd=ROOT / "server").returncode
 
-    result = Result("Server (pytest)")
+    result = Result("Backend (pytest)")
     if not junit.exists():
         result.errors = 1  # pytest stopped before it could write anything, e.g. DATABASE_URL is not set
         return result
@@ -103,7 +103,7 @@ def bundle(tmp: Path) -> Result:
     """Builds the production frontend and fails if any development-only sign-in text or call is still inside it."""
     out = tmp / "bundle"
     build = subprocess.run(["npx", "vite", "build", "--outDir", str(out), "--emptyOutDir"], cwd=ROOT / "client", capture_output=True, text=True)
-    result = Result("Production bundle (no dev sign-in)")
+    result = Result("Other (prod bundle)")
     if build.returncode != 0:
         result.errors = 1
         result.failures.append("vite build failed:\n" + build.stderr[-500:])
