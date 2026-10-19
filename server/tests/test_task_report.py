@@ -157,9 +157,8 @@ def test_an_admin_reads_any_team_a_manager_only_their_own(directory, admin, npi)
     assert directory.call(None, "GET", f"/reports/team{query}").status_code == 401
 
 
-@pytest.mark.parametrize("path", ["/reports/team?from=2026-10-12&to=2026-10-18"])
-def test_an_admin_with_no_team_must_choose_one(directory, admin, path):
-    assert directory.call(admin, "GET", path).json()["detail"]["code"] == "choose_team"
+def test_an_admin_with_no_team_must_choose_one(directory, admin):
+    assert directory.call(admin, "GET", "/reports/team?from=2026-10-12&to=2026-10-18").json()["detail"]["code"] == "choose_team"
 
 
 # ---- edges ----

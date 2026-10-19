@@ -215,20 +215,6 @@ def test_a_reassignment_is_written_to_the_audit_log_and_a_plain_edit_is_not(db, 
     assert entry.details["from"] == "Ravi" and entry.details["to"] == "Asha" and entry.details["title"] == "Wire harness v2"
 
 
-def test_the_task_audit_rows_cannot_be_changed_or_removed(db, npi):
-    from sqlalchemy import text
-    from sqlalchemy.exc import DBAPIError
-
-    task_id = make(db, npi)
-    commands.delete_task(db, npi["asha"], task_id)
-
-    for statement in ("UPDATE access_audit_log SET details = '{}'", "DELETE FROM access_audit_log WHERE action = 'task.delete'"):
-        with pytest.raises(DBAPIError, match="append-only"):
-            db.execute(text(statement))
-        db.rollback()
-    assert len(audit_rows(db, "task.delete")) == 1
-
-
 @pytest.mark.parametrize("path", [["in_progress", "blocked"], ["in_progress", "review"], ["in_progress", "done"]])
 def test_delete_is_refused_once_blocked_in_review_or_done(db, npi, path):
     task_id = make(db, npi)

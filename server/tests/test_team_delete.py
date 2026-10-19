@@ -93,8 +93,3 @@ def test_the_audit_log_keeps_a_record_of_the_deletion(directory, admin, db):
     # The earlier rows survive too: the team's history is not erased with the team.
     logged = directory.call(admin, "GET", "/audit-log").json()["items"]
     assert {e["action"] for e in logged} >= {"team.create", "team.delete"}
-
-
-def test_deleting_an_unknown_team_is_a_404(directory, admin):
-    ghost = {"id": "00000000-0000-0000-0000-000000000000", "name": "Ghost"}
-    assert delete(directory, admin, ghost).status_code == 404

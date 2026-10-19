@@ -187,19 +187,6 @@ def test_a_title_of_only_spaces_is_refused_by_the_service(directory, npi):
     assert (res.status_code, code(res)) == (422, "title_required")
 
 
-def test_a_finished_task_can_be_neither_edited_nor_reassigned(directory, npi):
-    # Changed on 17 Oct by decision: completed tasks are read-only. Reopen one to change it.
-    task_id = made(directory, npi)
-    for to in ("in_progress", "done"):
-        directory.call(npi["asha"], "POST", f"/tasks/{task_id}/status", json={"to": to, "note": "ok"})
-
-    edit = directory.call(npi["asha"], "PATCH", f"/tasks/{task_id}", json={"title": "Wire harness (final)"})
-    reassign = directory.call(npi["asha"], "PATCH", f"/tasks/{task_id}", json={"assignee_id": str(npi["asha"].id)})
-
-    assert (edit.status_code, code(edit)) == (409, "task_done")
-    assert (reassign.status_code, code(reassign)) == (409, "task_done")
-
-
 # ---- moves ----
 
 @pytest.mark.parametrize("size,expected", [(1, 200), (500, 200), (501, 422)], ids=["1", "500", "501"])

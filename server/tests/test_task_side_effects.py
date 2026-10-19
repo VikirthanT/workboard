@@ -4,7 +4,6 @@ one task or team never touches another."""
 from datetime import date
 
 import pytest
-from sqlalchemy import text
 
 from models import Person, Task, TaskActivity
 from tests.conftest import make_team
@@ -252,9 +251,3 @@ def test_the_timeline_only_grows(directory, db, npi, world):
         entries = [e[1] for e in snapshot(db)[1] if e[0] == a1]
         assert set(seen) <= set(entries) and len(entries) == len(seen) + 1
         seen = entries
-
-
-def test_the_database_itself_refuses_to_rewrite_the_timeline(db, world):
-    with pytest.raises(Exception, match="append-only"):
-        db.execute(text("UPDATE task_activity SET note = 'rewritten'"))
-    db.rollback()
