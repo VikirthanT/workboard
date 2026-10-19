@@ -1,6 +1,6 @@
 # Server tests
 
-550 tests: Google sign-in (`auth`), the identity feature (teams, members, admin access, sign-in rules, audit log, search and paging, the dev account list), the tasks feature (permission rules, commands, calculated facts, endpoints, access matrix, input limits, side effects, the team report), database rules, the app shell, the migrations and the seed loader.
+605 tests (100% line and branch coverage of the app code, measured with `make server-cov`): Google sign-in (`auth`), the identity feature (teams, members, admin access, sign-in rules, audit log, search and paging, the dev account list), the tasks feature (permission rules, commands, calculated facts, endpoints, access matrix, input limits, side effects, the team report), database rules, the app shell, the migrations and the seed loader.
 
 Every area is tested from both sides: what must work (positive), what must be refused (negative: wrong person, bad input, a move the rules do not allow), the edges of each limit (the largest value accepted and the first one refused), and that nothing unintended happens (a refused request leaves the database exactly as it was, a read writes nothing, an action on one task or team never touches another).
 
@@ -24,7 +24,7 @@ cd server
 | --- | --- | --- |
 | `test_auth.py` | 7 | Who can sign in |
 | `test_teams.py` | 10 | Creating teams, changing the manager, the audit log's names (`actor_name`, `person_name`, `team_name`) |
-| `test_members.py` | 10 | People on a team, the "Add person" picker |
+| `test_members.py` | 11 | People on a team, the "Add person" picker, the open-task count on the members list (Done and other teams' tasks not counted; null elsewhere) |
 | `test_team_delete.py` | 7 | Deleting a team |
 | `test_admin_access.py` | 10 | Make / Revoke admin, append-only audit log |
 | `test_seed_loader.py` | 13 | `seed/load_db.py`: directory load, people who left, bootstrap admins |
@@ -35,14 +35,19 @@ cd server
 | `test_directory_search.py` | 12 | The picker's search and filters, the `admins=true` list, adding and removing an admin who is on no team, only an admin may |
 | `test_pagination.py` | 18 | Server-side paging of `/people` and `/audit-log` |
 | `test_database_rules.py` | 23 | What Postgres itself enforces, written to directly (identity and tasks) |
-| `test_app.py` | 12 | Health, settings (no database default, a plain `postgresql://` URL gets the driver), unexpected errors, unknown routes |
-| `test_google_auth.py` | 70 | Google sign-in with Google's answers faked: start, callback, exchange, every refusal (state, nonce, audience, issuer, expiry, unverified or foreign email, unknown or plain member), single-use and expiring codes, and the session token as the API sees it (altered, expired, wrong kind, wrong key, lost role) |
+| `test_app.py` | 13 | Health, settings (no database default, a plain `postgresql://` URL gets the driver), unexpected errors, unknown routes, and that the server's "today" is the Indian date (`conftest.py` runs the suite in `Asia/Kolkata`, as production does) |
+| `test_text_edge_cases.py` | 5 | Non-ASCII, emoji and combining characters stored and returned exactly (tasks, comments, team names, reasons, search); length limits count characters, not bytes; a NUL character in any text field or in the search is a 422 `invalid_input`, never a 500, and changes nothing |
+| `test_concurrency.py` | 18 | Races, each run 6 times with threads and a barrier: one person added to two teams at once lands on one; one person made manager of two teams manages one; two admins revoking each other leave exactly one (the loser gets `last_admin`) |
+| `test_admin_manager.py` | 4 | A person who is admin and manager: full rights on their own team; on another team's board only read and comment, nothing changed; a new task lands on their own team only; as an admin they manage people on any team and need a reason |
+| `test_audit_trail.py` | 3 | The side effect of every identity change: one audit row each (team create, member add and remove, manager change, admin grant and revoke, team delete) with the right actor, person, team and trimmed reason, read back through `GET /audit-log`; seven refused changes write nothing; only an admin reads the log and it has no write route |
+| `test_google_auth.py` | 80 | Google sign-in with Google's answers faked: start, callback, exchange, every refusal (state, nonce, audience, issuer, expiry, unverified or foreign email, unknown or plain member), single-use and expiring codes, and the session token as the API sees it (altered, expired, wrong kind, wrong key, lost role, a signed payload that is not an object, an unusable `exp`) |
+| `test_google_exchange_code.py` | 9 | `google.exchange_code`, the call to Google's token endpoint, with `httpx.post` faked: what is sent, a refusal (logged without the secret), no or non-text `id_token`, a non-JSON answer, Google unreachable or slow |
 | `test_demo_seed.py` | 16 | `seed/demo_db.py`, the dev demo world: the three accounts sign in, teams and people, 14 tasks in every state, back-dated timelines, a realistic board, loading twice, clashes with real data, reset and remove touch only the demo (the audit log keeps its entries), the directory load never deactivates it, refuses outside development |
 | `test_dev_accounts.py` | 4 | `GET /dev/accounts`: who the dev login lists, refused examples, inactive people, 404 when `DEV_AUTH` is off |
 | `test_task_rules.py` | 12 | Who may act on a board, the moves each status allows, which need a reason (pure functions) |
 | `test_task_calculated.py` | 4 | Overdue, due soon, needs a new owner, needs attention (pure functions) |
 | `test_task_commands.py` | 29 | Create, edit, delete, move and comment: what each writes, refuses and leaves on the timeline; a deleted task's snapshot in the audit log, reassignment audit rows, the audit rows cannot be changed, admins may comment |
-| `test_task_api.py` | 18 | The task and board endpoints end to end: read access, filters, orphans, Done cards, an admin's read-only board with comments, a Done task cannot be edited until reopened, errors |
+| `test_task_api.py` | 21 | The task and board endpoints end to end: read access, filters, orphans, Done cards, an admin's read-only board with comments, a Done task cannot be edited until reopened, errors; plus three branches the API cannot reach, tested in the query functions (no team and not an admin, a missing timeline entry, a missing person) |
 | `test_task_report_all_teams.py` | 10 | `/reports/all-teams` (admin only): per-team rows, totals, edges |
 | `test_task_access.py` | 29 | Every task endpoint against every kind of caller (nobody, a person who cannot sign in, another team's manager, the owner, an admin) |
 | `test_task_validation.py` | 84 | Bad and borderline input: each limit on both sides, dates (a past due date is refused on create and on edit; today and later are fine; an old date may be kept or cleared), priorities, malformed and unknown ids, fields the client may not set, nulls, an unchangeable timeline |

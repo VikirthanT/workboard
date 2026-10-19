@@ -21,7 +21,7 @@ React + Vite + TypeScript, TanStack Query, React Router, dnd-kit, Tailwind v4 on
 | Google sign-in | `server/auth/` | Signed session tokens and one-time codes; `@atimotors.com` only; Google is faked in tests (not yet tried against real Google) |
 | Migrations | `server/migrations/` | The schema comes only from Alembic; a test checks them |
 | Settings | `server/core/` | Environment variables only; no secrets in code |
-| Tests | `server/tests/` | 555 pytest tests on a real Postgres test database |
+| Tests | `server/tests/` | 605 pytest tests on a real Postgres test database |
 
 ## Frontend (`client/`)
 
@@ -52,4 +52,4 @@ React + Vite + TypeScript, TanStack Query, React Router, dnd-kit, Tailwind v4 on
 
 ## Not done yet
 
-Browser pass in light and dark, component tests for the new screens, Playwright, server coverage pass, real Google sign-in, nginx and HTTPS, Slack bot (Phase 2). Details: `refdocs/checklist.md`.
+Browser pass in light and dark, more Playwright specs (a smoke test exists: `make e2e`), real Google sign-in, nginx and HTTPS, Slack bot (Phase 2). Details: `refdocs/checklist.md`.
