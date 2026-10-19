@@ -1,4 +1,7 @@
 """The application shell: health check, settings, and what an unexpected failure looks like from outside."""
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -7,6 +10,11 @@ from core.config import Settings, settings
 from identity.services import teams
 from main import app
 from tests.conftest import make_team
+
+
+def test_the_servers_today_is_the_indian_date():
+    # Due dates, overdue flags, completed_on and the reports all use date.today(); ATI is one site, in India.
+    assert date.today() == datetime.now(ZoneInfo("Asia/Kolkata")).date()
 
 
 def test_health_needs_no_sign_in(client):

@@ -31,6 +31,11 @@ Our Python (FastAPI) program, built from `Dockerfile.api`: start from a small Py
 `server/requirements.txt`, copy `server/` in. When it starts it first applies the database migrations, then serves.
 It answers every `/api/...` request: who you are, the board, tasks, reports.
 
+**What time is it?** The image is set to Indian time (`TZ=Asia/Kolkata`, with `tzdata` installed so the setting
+works). "Today" for due dates, overdue flags, the Done-on date and the reports comes from this clock, not from the
+user's browser, so the day changes at midnight in India. The database stores moments with their zone, so nothing
+stored changes.
+
 **How many workers?** A worker is one running copy of the API process. We start **2** (`uvicorn --workers 2` in
 `Dockerfile.api`): if one is busy or crashes the other still answers, and two requests can be handled at the same
 moment. For about eight managers one would do; two is the safe, cheap default. Raise it only if the API is ever

@@ -120,7 +120,7 @@ db-demo-remove:
 
 # DEV_AUTH=true is for local development only; without it the API answers 501 until Google sign-in exists.
 api-dev:
-	@$(LOAD_ENV) cd server && DEV_AUTH=true .venv/bin/uvicorn main:app --reload --port 8000
+	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/uvicorn main:app --reload --port 8000
 
 server-test:
 	@$(LOAD_ENV) python3 scripts/test_all.py server

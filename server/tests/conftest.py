@@ -1,6 +1,7 @@
 """Tests run against their own database (workboard_test_<pid>, one per run) built by the real Alembic migrations,
 so a passing suite also proves the migrations produce a working schema."""
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,10 @@ TEST_URL = BASE_URL.set(database=TEST_DB)
 # Must be set before anything imports core.config.
 os.environ["DATABASE_URL"] = TEST_URL.render_as_string(hide_password=False)
 os.environ["DEV_AUTH"] = "true"
+# The app decides "today" with the server's own clock, and ATI is in India: run the tests in IST, as production does
+# (Dockerfile.api), so they do not depend on where the developer's machine is.
+os.environ["TZ"] = "Asia/Kolkata"
+time.tzset()
 # `make test` loads the developer's .env into this process. The tests must not depend on it (whether Google sign-in is
 # set up on this machine, which domain or first admins it names, how long a session lasts), so every setting except
 # the database is dropped here and the app's own defaults apply. A test that needs a setting sets it itself.
