@@ -44,7 +44,7 @@ Every failure is `{"detail": {"code", "message"}}`; match on `code`.
 | 403 | `domain_not_allowed`, `not_onboarded`, `forbidden` |
 | 404 | `team_not_found`, `person_not_found`, `not_on_team` |
 | 409 | `team_name_taken`, `person_inactive`, `already_manager`, `already_on_team`, `same_manager`, `person_unavailable`, `is_manager`, `admin_unchanged`, `last_admin` |
-| 422 | `reason_required`, `reason_too_long`, `name_required`, `confirmation_mismatch`. A malformed body, id or paging value is also 422, but in FastAPI's own shape (`detail` is a list), not `{code, message}`. |
+| 422 | `reason_required`, `reason_too_long`, `name_required`, `confirmation_mismatch`, `invalid_input` (text the database cannot store, such as a NUL character; any endpoint, nothing is written). A malformed body, id or paging value is also 422, but in FastAPI's own shape (`detail` is a list), not `{code, message}`. |
 | 501 | `auth_not_configured` |
 
 ## Folder map

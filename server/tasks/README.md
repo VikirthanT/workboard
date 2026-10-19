@@ -30,7 +30,7 @@ Every failure is `{"detail": {"code", "message"}}`; match on `code`.
 | 403 | `forbidden` (not this team's manager, or not allowed to read it), `no_team` |
 | 404 | `task_not_found`, `team_not_found`, `activity_not_found` |
 | 409 | `invalid_transition`, `not_deletable`, `task_done` |
-| 422 | `reason_required`, `title_required`, `comment_required`, `invalid_assignee`, `unknown_filter`, `invalid_range`. A malformed body, id or date is also 422, in FastAPI's own shape. |
+| 422 | `reason_required`, `title_required`, `comment_required`, `invalid_assignee`, `unknown_filter`, `invalid_range`, `invalid_input` (text the database cannot store, such as a NUL character). A malformed body, id or date is also 422, in FastAPI's own shape. |
 
 ## Folder map
 
