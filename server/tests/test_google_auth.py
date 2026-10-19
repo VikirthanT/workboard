@@ -383,6 +383,24 @@ def test_a_token_signed_with_another_key_is_refused(directory, asha, monkeypatch
     assert directory.client.get("/api/me", headers=bearer(other)).status_code == 401
 
 
+@pytest.mark.parametrize("payload", [b"not json at all", b"\xff\xfe", b'["a", "list"]', b'"a string"', b"42"], ids=["text", "bytes", "list", "string", "number"])
+def test_a_correctly_signed_payload_that_is_not_a_json_object_is_refused(directory, asha, payload):
+    body = tokens._b64(payload)
+    forged = f"{body}.{tokens._mac(body)}"  # only someone with the key could sign this, but the shape is still checked
+
+    assert tokens.verify(forged, "session") is None
+    assert directory.client.get("/api/me", headers=bearer(forged)).status_code == 401
+
+
+@pytest.mark.parametrize("exp", ["soon", None, [1], {"a": 1}, float("inf")], ids=["text", "null", "list", "object", "infinity"])
+def test_a_correctly_signed_token_with_an_unusable_expiry_is_refused_not_a_500(directory, asha, exp):
+    body = tokens._b64(json.dumps({"kind": "session", "sub": str(asha.id), "exp": exp}).encode())
+    forged = f"{body}.{tokens._mac(body)}"
+
+    assert tokens.verify(forged, "session") is None
+    assert directory.client.get("/api/me", headers=bearer(forged)).status_code == 401
+
+
 def test_a_token_does_not_outlive_the_role(directory, asha, db):
     token = session_token(asha)
     asha.role = "member"  # no longer a manager

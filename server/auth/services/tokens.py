@@ -50,6 +50,10 @@ def verify(token: str, kind: str, *, now: float | None = None) -> dict | None:
         return None
     if not isinstance(payload, dict) or payload.get("kind") != kind:
         return None
-    if int(payload.get("exp", 0)) <= (now if now is not None else time.time()):
+    try:
+        expires = int(payload.get("exp", 0))
+    except (TypeError, ValueError, OverflowError):  # a signed token with a junk `exp` is still just "not signed in"
+        return None
+    if expires <= (now if now is not None else time.time()):
         return None
     return payload

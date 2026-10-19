@@ -45,7 +45,7 @@ Redirect errors (`/login?error=...`; the login page has a message for each, list
 | `domain_not_allowed` | The verified email is not on `ALLOWED_EMAIL_DOMAIN`. Matched as a whole suffix (`@atimotors.com`), so `x@atimotors.com.evil.com` does not pass. |
 | `not_onboarded` | A real company account, but not an active manager or admin. |
 
-API errors from a token: 401 `not_authenticated` (missing, malformed, altered, expired, wrong kind of token, or the person
+API errors from a token: 401 `not_authenticated` (missing, malformed, altered, expired or with an unusable expiry, wrong kind of token, or the person
 is gone), 403 `not_onboarded` (the person lost their role since the token was made: a token never outlives the role).
 
 ## Settings (in `.env`, see `.env.example`)
