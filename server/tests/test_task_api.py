@@ -2,7 +2,11 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
+from core.exceptions import AppError
 from models import Task
+from tasks.services import queries
 from tests.conftest import make_team
 
 
@@ -231,6 +235,25 @@ def test_a_done_task_cannot_be_edited_until_it_is_reopened(directory, npi):
     reopened = move(directory, npi, task, "in_progress", "needs one more change")
     assert reopened["actions"]["can_edit"] is True
     assert directory.call(npi["asha"], "PATCH", f"/tasks/{task['id']}", json={"title": "Renamed"}).status_code == 200
+
+
+def test_a_person_on_no_team_who_is_not_an_admin_has_no_board(db, npi):
+    # Not reachable through the API (such a person cannot sign in), so the rule is checked where it lives.
+    with pytest.raises(AppError) as err:
+        queries.resolve_board_team(db, npi["zoe"], None)
+
+    assert (err.value.status_code, err.value.code) == (403, "no_team")
+
+
+def test_a_timeline_entry_that_does_not_exist_is_a_404(db, admin):
+    with pytest.raises(AppError) as err:
+        queries.get_activity(db, admin, uuid.uuid4())
+
+    assert (err.value.status_code, err.value.code) == (404, "activity_not_found")
+
+
+def test_a_task_whose_person_row_is_gone_has_no_summary():
+    assert queries._summary(None) is None
 
 
 def test_the_task_routes_need_a_signed_in_person(directory, npi):
