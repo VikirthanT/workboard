@@ -16,3 +16,9 @@ deliverables/
 # Machine-local editor / agent settings (the shared .claude/settings.json is tracked)
 .claude/settings.local.json
 claude_template.md
+# Walkthrough tooling, kept local
+.claude/
+client/walkthrough/
+client/playwright.walkthrough.config.ts
+scripts/walkthrough*.py
+walkthrough.json
