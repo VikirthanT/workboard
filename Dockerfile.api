@@ -12,6 +12,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server/ .
 
+# Run as an unprivileged user: a bug in the API then does not hand over root inside the container.
+RUN useradd --system --no-create-home --uid 10001 app
+USER app
+
 EXPOSE 8000
 
 # The schema comes only from the migrations: apply them, then serve. No seeding happens here.

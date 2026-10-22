@@ -96,7 +96,7 @@ client-test:
 
 server-install:
 	python3 -m venv server/.venv
-	server/.venv/bin/pip install -r server/requirements.txt
+	server/.venv/bin/pip install -r server/requirements-dev.txt
 
 db-up:
 	$(DEV_COMPOSE) up -d --wait db

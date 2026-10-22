@@ -2,6 +2,12 @@
 # stays out of the build context.
 *
 !server
+!client
+!nginx
+client/node_modules
+client/dist
+client/test-results
+client/e2e
 server/.venv
 server/.pytest_cache
 server/tests
