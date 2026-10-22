@@ -73,7 +73,7 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 
 **Checked.** `make typecheck` passes; `make test`: frontend 180, server 609, production bundle 5, all passing.
 
-**Not done or not checked.** The docker stack was not built or run, so the nginx and frontend containers are untested. The favicon was not looked at in a browser. The react-router 7 upgrade has only the unit tests behind it, no click-through. The 10 second Google timer has no test and is not cleared on unmount. The walkthrough tooling (`client/walkthrough/`, `scripts/walkthrough*.py`, `walkthrough.json`, the Makefile target) and its text in `CLAUDE.md` are still uncommitted by choice, so the walkthrough notes here and in `client/ARCHITECTURE.md` point at files that are not in the repository yet.
+**Not done or not checked.** The docker stack was not built or run, so the nginx and frontend containers are untested. The favicon was not looked at in a browser. The react-router 7 upgrade has only the unit tests behind it, no click-through. The 10 second Google timer has no test and is not cleared on unmount. The walkthrough tooling (`client/walkthrough/`, `scripts/walkthrough*.py`, `walkthrough.json`, the Makefile target) are still uncommitted by choice (its text in `CLAUDE.md` was committed in `b17dc01`), so the walkthrough notes here and in `client/ARCHITECTURE.md` point at files that are not in the repository yet.
 
 ## 19 Oct 2026: first commits, late completion, team-delete audit, small UI fixes
 
