@@ -21,6 +21,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   invalid_state: 'That sign-in did not start here or took too long. Please try again.',
 };
 
+const GOOGLE_REDIRECT_TIMEOUT_MS = 10_000;
+
 const rise = (ms: number) => ({ animationDelay: `${ms}ms` });
 
 export function LoginPage() {
@@ -31,6 +33,7 @@ export function LoginPage() {
 
   const [formError, setFormError] = useState('');
   const [chooser, setChooser] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   /** Step 2 of the Google flow: the real callback brings a `code` back to /login. */
   function signInWithCode(code: string) {
@@ -74,7 +77,15 @@ export function LoginPage() {
 
   /** The real thing: the server sends the browser to Google and Google sends it back to /login with a code. */
   function signInWithGoogle() {
+    setChooser(false);
+    setFormError('');
+    setRedirecting(true);
     window.location.href = '/api/auth/google';
+    // If the page is still here after this long, Google or the server is not answering: unlock the button.
+    setTimeout(() => {
+      setRedirecting(false);
+      setFormError('Google is taking too long to respond. Please try again.');
+    }, GOOGLE_REDIRECT_TIMEOUT_MS);
   }
 
   function pickAccount(accountEmail: string) {
@@ -86,7 +97,7 @@ export function LoginPage() {
     });
   }
 
-  const busy = exchange.isPending || dev.isPending;
+  const busy = exchange.isPending || dev.isPending || redirecting;
 
   return (
     <div className="login-page">
