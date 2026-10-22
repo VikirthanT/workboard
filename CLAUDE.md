@@ -202,6 +202,7 @@ make client-test # only the frontend's unit tests
 make server-test # only the server's tests (pytest, own Postgres test database workboard_test_<pid>, one per run; needs make db-up)
 make server-cov  # the server's tests plus a coverage table (server/.coveragerc)
 make e2e         # Playwright smoke tests in a browser on a throwaway database with the demo world (API :8100, Vite :5174); not part of make test; browser: cd client && npx playwright install chromium
+make walkthrough # records deliverables/: 31 screenshots (light and dark) and a captioned mp4 of the whole app, on a throwaway database with the demo world; needs ffmpeg; `make walkthrough ARGS=screenshots` for one part. The tool is the `walkthrough` skill's `scripts/walkthrough.py` (copied in; it also has `explore` and `crawl` to map the project and the running app)
 make typecheck   # tsc --noEmit (not part of make test)
 # AtiUI token check (must print nothing):
 grep -rnE "#[0-9a-fA-F]{6}\b|rgba?\(|bg-\[|text-\[|rounded-\[" client/src --include=*.tsx
@@ -225,4 +226,4 @@ Standup suggestions (the Suggestions inbox, its approve / reject / restore / exp
 
 ## What's not done yet
 
-Keep this list current. Phase 1: the admin and My team screens are rebuilt on the server's rules (done 17 Oct; see `docs/WORKLOG.md`). Left (component tests, error boundaries, the server coverage pass and the Playwright smoke test are done, 19 Oct): a browser check of every screen and dialog in light and dark, (the open-task warning when removing a person is done, 19 Oct), trying Google sign-in against real Google (built; needs the OAuth client and the `.env` settings), then the nginx container and HTTPS (see `docs/DEPLOYMENT.md`), the security audit, and whether `seed/people.json` is committed. Phase 2: the Slack bot and the weekly Slack directory pull. Keka is dropped. Standup suggestions and the weekly handover: later branch (see above).
+Keep this list current. Phase 1: the admin and My team screens are rebuilt on the server's rules (done 17 Oct; see `docs/WORKLOG.md`). Left (component tests, error boundaries, the server coverage pass and the Playwright smoke test are done, 19 Oct): (the browser check of every screen and dialog in light and dark is done as the walkthrough, 19 Oct: `make walkthrough`, nothing wrong found), (the open-task warning when removing a person is done, 19 Oct), trying Google sign-in against real Google (built; needs the OAuth client and the `.env` settings), then the nginx container and HTTPS (see `docs/DEPLOYMENT.md`), the security audit, and whether `seed/people.json` is committed. Phase 2: the Slack bot and the weekly Slack directory pull. Keka is dropped. Standup suggestions and the weekly handover: later branch (see above).
