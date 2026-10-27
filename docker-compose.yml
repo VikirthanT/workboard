@@ -1,8 +1,10 @@
 # Production stack (make prod-up): database + API. Local development uses docker-compose.dev.yml.
 # Credentials come from .env (see .env.example); the password has no default.
+name: workboard
 services:
   db:
     image: postgres:16
+    container_name: workboard-db
     restart: unless-stopped
     # No `ports:` on purpose: the database is reachable only over the internal Compose network (db:5432).
     environment:
@@ -18,6 +20,8 @@ services:
       retries: 10
 
   server:
+    image: workboard-server
+    container_name: workboard-server
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -50,6 +54,8 @@ services:
 
   # The built React app, served as plain files. Not published: only nginx reaches it.
   frontend:
+    image: workboard-client
+    container_name: workboard-client
     build:
       context: .
       dockerfile: Dockerfile.frontend
@@ -58,6 +64,7 @@ services:
   # The one public door: /api -> server, everything else -> frontend.
   nginx:
     image: nginx:1.27-alpine
+    container_name: workboard-nginx
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
@@ -71,3 +78,5 @@ services:
 
 volumes:
   pgdata:
+    # Pinned to the volume created when the project was still called workboard-plan, so the data stays attached.
+    name: workboard-plan_pgdata
