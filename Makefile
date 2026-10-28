@@ -21,7 +21,7 @@ NO_PEOPLE = echo "NOTE: $$f not found, so no people were loaded. Set PEOPLE_FILE
 
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
         server-install db-up db-down db-migrate db-seed db-demo db-demo-reset db-demo-remove api-dev server-test server-cov e2e \
-        prod-up prod-load-people prod-down prod-logs
+        prod-up prod-backup prod-load-people prod-down prod-logs
 
 help:
 	@echo "make install    install frontend dependencies"
@@ -137,9 +137,22 @@ server-cov:
 	@$(LOAD_ENV) cd server && .venv/bin/pytest -q --cov --cov-report=term-missing
 
 # Production: no DEV_AUTH and no mock reach the containers (see docker-compose.yml).
-prod-up:
+prod-up: prod-backup
 	docker compose up -d --build --wait
 	@$(MAKE) --no-print-directory prod-load-people
+
+# Dump the running database to backups/ (private, gitignored) before anything is changed; keeps the newest 14.
+# On a first deploy there is no database yet, so it says so and skips. A failed dump stops prod-up.
+prod-backup:
+	@if [ -z "$$(docker compose ps --status running -q db)" ]; then \
+		echo "NOTE: database is not running, so there is nothing to back up (first deploy?)."; \
+	else \
+		umask 077; mkdir -p backups; f="backups/workboard-$$(date +%F-%H%M%S).sql.gz"; \
+		docker compose exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > "$$f.tmp" \
+			&& gzip "$$f.tmp" && mv "$$f.tmp.gz" "$$f" || { rm -f "$$f.tmp" "$$f.tmp.gz"; echo "Backup failed, nothing was changed."; exit 1; }; \
+		echo "Backup written to $$f"; \
+		ls -1t backups/workboard-*.sql.gz | tail -n +15 | xargs -r rm -f; \
+	fi
 
 # One-off container: the loader and the people file are mounted read-only for this run, never baked into the image.
 prod-load-people:

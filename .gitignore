@@ -4,6 +4,8 @@ dist/
 *.log
 # Real names, emails and Slack IDs (from the Slack user cache CSV). Whether it is committed is decided at commit time.
 seed/people.json
+# Database dumps from make prod-backup (real data)
+backups/
 __pycache__/
 .venv/
 .pytest_cache/
