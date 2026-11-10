@@ -17,7 +17,8 @@ from security import authorization
 from tasks import states
 from tasks.services import activity
 from tasks.services.deletion_audit import record_task_deleted
-from tasks.services.lookup import get_task_and_team
+from tasks.services.import_parse import ImportRow, RowError
+from tasks.services.lookup import get_task_and_team, own_team
 
 
 def create_task(
@@ -30,13 +31,64 @@ def create_task(
     due_at: date | None,
     assignee_id: uuid.UUID,
     today: date | None = None,
+    support_id: uuid.UUID | None = None,
+    project: str | None = None,
+    stage: str | None = None,
+    start_at: date | None = None,
 ) -> None:
     """The task lands on the actor's own team; anyone else is refused (an admin who runs a team uses that team)."""
-    if actor.team_id is None:
-        raise AppError("forbidden", "You are not on a team.", 403)
-    team = get_team(db, actor.team_id)
-    authorization.require_act(actor, team)
+    team = own_team(db, actor)
+    _add_task(
+        db, actor, team, task_id, title, description, priority, due_at, assignee_id, today,
+        support_id, project, stage, start_at,
+    )
+    db.commit()
+
+
+def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date | None = None) -> None:
+    """Create every row on the actor's own team in one transaction: if any row breaks a task rule, none is saved
+    and `ImportRejected` lists each row's problem."""
+    team = own_team(db, actor)
+    errors: list[RowError] = []
+    for row in rows:
+        try:
+            _add_task(
+                db, actor, team, uuid.uuid4(), row.title, row.description, row.priority, row.due_at,
+                row.assignee_id, today, row.support_id, row.project, row.stage, row.start_at,
+            )
+        except AppError as err:
+            errors.append(RowError(row.number, "", err.message))
+    if errors:
+        db.rollback()
+        raise ImportRejected(errors)
+    db.commit()
+
+
+class ImportRejected(Exception):
+    def __init__(self, errors: list[RowError]):
+        super().__init__("Some rows broke a task rule.")
+        self.errors = errors
+
+
+def _add_task(
+    db: Session,
+    actor: Person,
+    team: Team,
+    task_id: uuid.UUID,
+    title: str,
+    description: str,
+    priority: str,
+    due_at: date | None,
+    assignee_id: uuid.UUID,
+    today: date | None,
+    support_id: uuid.UUID | None,
+    project: str | None,
+    stage: str | None,
+    start_at: date | None,
+) -> None:
+    """Check and add one task and its first timeline entry; the caller commits."""
     _require_not_past(due_at, today)
+    _require_start_not_after_due(start_at, due_at)
     task = Task(
         id=task_id,
         team_id=team.id,
@@ -46,11 +98,14 @@ def create_task(
         due_at=due_at,
         creator_id=actor.id,
         assignee_id=_assignee_on(db, team, assignee_id).id,
+        support_id=_support(db, support_id).id if support_id else None,
+        project=_label(project),
+        stage=_label(stage),
+        start_at=start_at,
     )
     db.add(task)
     db.flush()  # the timeline row below points at the task
     activity.record(db, actor, task, "created", new="todo")
-    db.commit()
 
 
 def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, today: date | None = None) -> None:
@@ -78,6 +133,21 @@ def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, t
     if "due_at" in changes and changes["due_at"] != task.due_at:  # null is a real change: it clears the date
         edits.append((states.FIELD_DUE, task.due_at, changes["due_at"]))
         task.due_at = changes["due_at"]
+    if "start_at" in changes and changes["start_at"] != task.start_at:
+        edits.append((states.FIELD_START, task.start_at, changes["start_at"]))
+        task.start_at = changes["start_at"]
+    _require_start_not_after_due(task.start_at, task.due_at)
+    for field, label in (("project", states.FIELD_PROJECT), ("stage", states.FIELD_STAGE)):
+        if field in changes and _label(changes[field]) != getattr(task, field):
+            edits.append((label, getattr(task, field), _label(changes[field])))
+            setattr(task, field, _label(changes[field]))
+    if "support_id" in changes and changes["support_id"] != task.support_id:  # null clears it
+        old_support = get_person(db, task.support_id) if task.support_id else None
+        new_support = _support(db, changes["support_id"]) if changes["support_id"] else None
+        edits.append((
+            states.FIELD_SUPPORT, old_support.name if old_support else None, new_support.name if new_support else None,
+        ))
+        task.support_id = new_support.id if new_support else None
     for label, old, new in edits:
         activity.record(db, actor, task, "edit", field=label, old=_text(old), new=_text(new))
 
@@ -171,6 +241,24 @@ def _require_not_past(due_at: date | None, today: date | None) -> None:
     """A due date is today or later (no date at all is fine). `today` is the server's date; tests pass their own."""
     if due_at is not None and due_at < (today or date.today()):
         raise AppError("due_date_past", "The due date cannot be in the past.", 422)
+
+
+def _require_start_not_after_due(start_at: date | None, due_at: date | None) -> None:
+    if start_at is not None and due_at is not None and start_at > due_at:
+        raise AppError("start_after_due", "The start date cannot be after the due date.", 422)
+
+
+def _label(value: str | None) -> str | None:
+    """Project and stage are free text; blank means none."""
+    return (value or "").strip() or None
+
+
+def _support(db: Session, person_id: uuid.UUID) -> Person:
+    """Support may be anyone active in the directory; the task still lives only on the assignee's team."""
+    person = get_person(db, person_id)
+    if not person.active:
+        raise AppError("invalid_support", "Choose an active person for support.", 422)
+    return person
 
 
 def _clean_title(title: str) -> str:

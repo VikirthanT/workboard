@@ -160,7 +160,13 @@ export function TaskDetailSheet({ taskId, me, readOnly = false, onClose, onEdit,
 
               <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-base">
                 <dt className="text-ink-subtle">Assignee</dt>
-                <dd className="flex items-center gap-2 text-ink"><Avatar size="sm" name={task.assignee.displayName} />{task.assignee.displayName} ({task.assignee.email}){!task.assignee.active && <span className="text-sm text-warning-ink">(inactive)</span>}</dd>
+                <dd className="flex items-center gap-2 text-ink">{task.assignee.displayName} ({task.assignee.email}){!task.assignee.active && <span className="text-sm text-warning-ink">(inactive)</span>}</dd>
+                {task.support && (
+                  <>
+                    <dt className="text-ink-subtle">Support</dt>
+                    <dd className="flex items-center gap-2 text-ink">{task.support.displayName} ({task.support.email}){!task.support.active && <span className="text-sm text-warning-ink">(inactive)</span>}</dd>
+                  </>
+                )}
                 <dt className="text-ink-subtle">Created by</dt>
                 <dd className="text-ink">{task.creator.displayName} ({task.creator.email})</dd>
                 <dt className="text-ink-subtle">Priority</dt>

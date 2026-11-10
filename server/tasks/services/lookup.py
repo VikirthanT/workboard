@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from core.exceptions import AppError
 from identity.services.lookup import get_team
-from models import Task, Team
+from models import Person, Task, Team
+from security import authorization
 
 
 def get_task(db: Session, task_id: uuid.UUID, *, lock: bool = False) -> Task:
@@ -18,6 +19,15 @@ def get_task(db: Session, task_id: uuid.UUID, *, lock: bool = False) -> Task:
     if task is None:
         raise AppError("task_not_found", "That task does not exist.", 404)
     return task
+
+
+def own_team(db: Session, actor: Person) -> Team:
+    """The actor's own team, for a command that adds tasks to it; anyone who could not act on it is refused."""
+    if actor.team_id is None:
+        raise AppError("forbidden", "You are not on a team.", 403)
+    team = get_team(db, actor.team_id)
+    authorization.require_act(actor, team)
+    return team
 
 
 def get_task_and_team(db: Session, task_id: uuid.UUID, *, lock: bool = False) -> tuple[Task, Team]:

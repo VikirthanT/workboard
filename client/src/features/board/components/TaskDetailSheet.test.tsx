@@ -42,6 +42,19 @@ describe('TaskDetailSheet', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
+  it('shows the support person just below the assignee, and no Support row when there is none', () => {
+    const divya = { id: 'd', displayName: 'Divya Nair', email: 'divya@example.test', active: true };
+    show(task({ support: divya }));
+    const terms = screen.getAllByRole('term').map((t) => t.textContent);
+    expect(terms.slice(0, 2)).toEqual(['Assignee', 'Support']);
+    expect(screen.getByText(/Divya Nair \(divya@example.test\)/)).toBeInTheDocument();
+  });
+
+  it('has no Support row when the task has no support person', () => {
+    show(task({ support: null }));
+    expect(screen.queryByText('Support')).not.toBeInTheDocument();
+  });
+
   it('shows Resume on a blocked task and calls onTransition with it', async () => {
     const resume = { to: 'in_progress', kind: 'resume', label: 'Resume' } as unknown as Transition;
     const t = task({ status: 'blocked', actions: { transitions: [resume] } });

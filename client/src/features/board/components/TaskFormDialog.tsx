@@ -4,12 +4,12 @@ import { DatePicker } from '../../../app/components/ui/date-picker';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../app/components/ui/dialog';
 import { Input } from '../../../app/components/ui/input';
 import { Label } from '../../../app/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../app/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectSearchInput, SelectTrigger, SelectValue } from '../../../app/components/ui/select';
 import { Textarea } from '../../../app/components/ui/textarea';
 import { todayISO } from '../../../app/domain/dates';
-import { PRIORITIES, type Me, type Task, type TaskInput } from '../../../app/types/types';
+import { PRIORITIES, type Me, type PersonSummary, type Task, type TaskInput } from '../../../app/types/types';
 import { errorMessage } from '../../../services/api';
-import { useCreateTask, useUpdateTask } from '../hooks';
+import { useCreateTask, usePeopleSearch, useUpdateTask } from '../hooks';
 
 interface Props {
   open: boolean;
@@ -21,7 +21,8 @@ interface Props {
   onClose: (saved?: Task) => void;
 }
 
-const EMPTY = { title: '', description: '', priority: 'medium' as TaskInput['priority'], dueAt: '', assigneeId: '' };
+const EMPTY = { title: '', description: '', priority: 'medium' as TaskInput['priority'], dueAt: '', assigneeId: '', project: '' };
+const NO_SUPPORT = 'none'; // Select items cannot have an empty value
 
 const Required = () => <><span aria-hidden className="text-danger"> *</span><span className="sr-only"> (required)</span></>;
 
@@ -31,13 +32,19 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
   const update = useUpdateTask();
   const [f, setF] = useState(EMPTY);
   const [error, setError] = useState('');
+  // Support is anyone active in the directory, so it is searched on the server as you type.
+  const [support, setSupport] = useState<PersonSummary | null>(null);
+  const [q, setQ] = useState('');
+  const people = usePeopleSearch(open, q);
 
   useEffect(() => {
     if (!open) return;
     setError('');
+    setQ('');
+    setSupport(task?.support ?? null);
     setF(
       task
-        ? { title: task.title, description: task.description, priority: task.priority, dueAt: task.dueAt ?? '', assigneeId: task.assignee.id }
+        ? { title: task.title, description: task.description, priority: task.priority, dueAt: task.dueAt ?? '', assigneeId: task.assignee.id, project: task.project ?? '' }
         : { ...EMPTY, assigneeId: me.assignable.some((p) => p.id === defaultAssigneeId) ? defaultAssigneeId! : me.assignable[0]?.id ?? '' },
     );
   }, [open, task, me, defaultAssigneeId]);
@@ -52,7 +59,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!ready) return;
-    const input: TaskInput = { title: f.title.trim(), description: f.description, priority: f.priority, dueAt: f.dueAt || null, assigneeId: f.assigneeId };
+    const input: TaskInput = { title: f.title.trim(), description: f.description, priority: f.priority, dueAt: f.dueAt || null, assigneeId: f.assigneeId, supportId: support?.id ?? null, project: f.project.trim() || null };
     const done = { onSuccess: (t: Task) => onClose(t), onError: (err: unknown) => setError(errorMessage(err)) };
     if (task) update.mutate({ id: task.id, patch: canPickAssignee ? input : { ...input, assigneeId: undefined } }, done);
     else create.mutate(input, done);
@@ -103,6 +110,26 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
               <div>
                 <Label htmlFor="task-due">Due date</Label>
                 <DatePicker id="task-due" className="mt-2 h-10" value={f.dueAt} minDate={todayISO()} onChange={(v) => set('dueAt', v)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="task-project">Project</Label>
+                <Input id="task-project" className="mt-2" value={f.project} onChange={(e) => set('project', e.target.value)} maxLength={100} placeholder="Optional" />
+              </div>
+              <div>
+                <Label htmlFor="task-support">Support</Label>
+                <Select
+                  value={support?.id ?? NO_SUPPORT}
+                  onValueChange={(id) => setSupport(id === NO_SUPPORT ? null : (people.data ?? []).find((p) => p.id === id) ?? support)}
+                >
+                  <SelectTrigger id="task-support" className="mt-2"><SelectValue>{support?.displayName ?? 'None'}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectSearchInput value={q} onValueChange={setQ} placeholder="Search by name or email" aria-label="Search people" />
+                    <SelectItem value={NO_SUPPORT}>No support</SelectItem>
+                    {(people.data ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.displayName} ({p.email})</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             {error && <p role="alert" className="text-sm text-danger-ink">{error}</p>}

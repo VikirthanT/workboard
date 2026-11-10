@@ -30,6 +30,11 @@ class Task(Base):
     # People are never deleted (only marked inactive), so SET NULL is a safety net, not a normal path.
     creator_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
+    # Support is a directory person, stored only: no board, report or notification uses it in Phase 1.
+    support_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
+    project: Mapped[str | None] = mapped_column(String)
+    stage: Mapped[str | None] = mapped_column(String)
+    start_at: Mapped[date | None] = mapped_column(Date)
     returned_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # Phase 2 (Slack Accept)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

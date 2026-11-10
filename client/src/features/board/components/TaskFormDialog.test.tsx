@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }));
 vi.mock('../hooks', () => ({
   useCreateTask: () => ({ mutate: h.create, isPending: false }),
   useUpdateTask: () => ({ mutate: h.update, isPending: false }),
+  usePeopleSearch: () => ({ data: [ann] }),
 }));
 
 const ann = { id: 'a', displayName: 'Ann Member', email: 'ann@example.test', active: true };
@@ -40,9 +41,24 @@ describe('TaskFormDialog', () => {
     await userEvent.type(screen.getByLabelText(/Title/), '  Order parts ');
     await userEvent.click(screen.getByRole('button', { name: 'Add task' }));
     expect(h.create).toHaveBeenCalledWith(
-      { title: 'Order parts', description: '', priority: 'medium', dueAt: null, assigneeId: 'a' },
+      { title: 'Order parts', description: '', priority: 'medium', dueAt: null, assigneeId: 'a', supportId: null, project: null },
       expect.anything(),
     );
+  });
+
+  it('sends the optional project, trimmed', async () => {
+    open();
+    await userEvent.type(screen.getByLabelText(/Title/), 'Order parts');
+    await userEvent.type(screen.getByLabelText('Project'), '  Harness v2 ');
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }));
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ project: 'Harness v2', supportId: null }), expect.anything());
+  });
+
+  it('keeps an existing support person when editing, and Add task needs neither field', () => {
+    const task = { id: 't', title: 'X', description: '', priority: 'medium', dueAt: null, project: 'P1', support: ann, assignee: ann, actions: { canChangeAssignee: true } } as unknown as Task;
+    open({ task });
+    expect(screen.getByLabelText('Project')).toHaveValue('P1');
+    expect(screen.getByRole('combobox', { name: 'Support' })).toHaveTextContent('Ann Member');
   });
 
   it('shows the server message when the create fails', async () => {

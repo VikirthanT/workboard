@@ -6,11 +6,12 @@ from sqlalchemy.exc import DataError
 class AppError(Exception):
     """A rule or access failure. Rendered as {"detail": {"code", "message"}}."""
 
-    def __init__(self, code: str, message: str, status_code: int = 400):
+    def __init__(self, code: str, message: str, status_code: int = 400, headers: dict[str, str] | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.headers = headers  # e.g. Retry-After on a 429
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -19,6 +20,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": {"code": exc.code, "message": exc.message}},
+            headers=exc.headers,
         )
 
     @app.exception_handler(DataError)

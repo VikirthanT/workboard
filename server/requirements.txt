@@ -7,3 +7,8 @@ sqlalchemy==2.0.43
 alembic==1.16.5
 psycopg[binary]==3.2.10
 httpx==0.28.1
+openpyxl==3.1.5
+# openpyxl uses it when installed to refuse hostile XML in an uploaded sheet; the production image installs only this file
+defusedxml==0.7.1
+# 0.0.20 had six denial-of-service and path-traversal advisories; 0.0.31 or later fixes them all
+python-multipart==0.0.33

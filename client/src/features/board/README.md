@@ -14,7 +14,9 @@ The board opens on **all tasks**; "Needs attention" (with its count) is a tick t
 |---|---|---|
 | `GET /board?team=` | `services/tasks.ts` `getBoard`, `hooks/useBoard.ts` | The team's cards, stats, filter counts, attention count, tasks needing a new owner, `read_only`. `team` is for admins; a manager is refused another team |
 | `GET /reports/team?team=` | `services/reports.ts`, `hooks/useTeamReport.ts` | Per-person and total numbers, all time and for a period (same team rule) |
-| `POST /tasks` | `createTask`, `TaskFormDialog.tsx` | New manual task. The Add task / Save changes button stays disabled until the title is filled and, when the assignee can be picked, an assignee is chosen (both show a red star) |
+| `POST /tasks` | `createTask`, `TaskFormDialog.tsx` | New manual task. The Add task / Save changes button stays disabled until the title is filled and, when the assignee can be picked, an assignee is chosen (both show a red star). Project (free text) and Support (anyone active in the directory, searched on the server through `GET /people?q=` as you type; "No support" clears it) are optional |
+| `GET /tasks/import/template` | `services/imports.ts` `downloadImportTemplate`, `ImportDialog.tsx` | The .xlsx to fill in; its Assignee dropdown is the manager's team as it is at download time |
+| `POST /tasks/import` | `uploadTasks`, `hooks/useTaskMutations.ts` `useImportTasks`, `ImportDialog.tsx` | The Import button (next to Add task, hidden on a read-only board): download the template, choose the filled-in file, Upload. All or nothing; a refused file lists each problem as "Row n, Column: message" |
 | `GET /tasks/:id` | `getTask`, `hooks/useBoard.ts` `useTask` | Task and its timeline |
 | `PATCH /tasks/:id` | `updateTask` | Edit or reassign |
 | `DELETE /tasks/:id` | `deleteTask` | Only while To Do / In Progress |
@@ -29,7 +31,7 @@ Rules: `server/security/authorization.py`. The UI reads the `actions` the API re
 board/
 ├── BoardView.tsx
 ├── pdf.ts                 Report PDF download
-├── components/            KanbanBoard, TaskCard, TaskDetailSheet, TaskFormDialog, ReasonDialog,
+├── components/            KanbanBoard, TaskCard, TaskDetailSheet, TaskFormDialog, ImportDialog, ReasonDialog,
 │                          FilterMenu, BoardPanels (orphan banner), ReportDialog, ReportVisuals
 ├── hooks/                 useBoard / useTask, useTaskMutations, useBoardParams (URL state), useTeamReport
 └── index.ts

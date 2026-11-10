@@ -66,6 +66,8 @@ export interface WireTask {
   /** Null only if the person row is gone (the server never deletes people, it marks them inactive). */
   creator: WirePersonSummary | null;
   assignee: WirePersonSummary | null;
+  support: WirePersonSummary | null;
+  project: string | null;
   returned_count: number;
   created_at: string;
   updated_at: string;
