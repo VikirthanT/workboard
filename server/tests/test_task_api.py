@@ -9,6 +9,8 @@ from models import Task
 from tasks.services import queries
 from tests.conftest import make_team
 
+DUE = (date.today() + timedelta(days=30)).isoformat()  # a due date can never be in the past, so it moves with the clock
+
 
 def create(directory, npi, **fields):
     body = {"title": "Wire harness", "assignee_id": str(npi["ravi"].id), **fields}
@@ -32,10 +34,10 @@ def board(directory, who, query=""):
 # ---- create and read ----
 
 def test_create_returns_the_task_with_the_actions_its_manager_has(directory, npi):
-    task = create(directory, npi, priority="high", due_at="2026-10-30")
+    task = create(directory, npi, priority="high", due_at=DUE)
 
     assert (task["status"], task["priority"], task["due_at"], task["assignee"]["name"], task["creator"]["name"]) == (
-        "todo", "high", "2026-10-30", "Ravi", "Asha",
+        "todo", "high", DUE, "Ravi", "Asha",
     )
     actions = task["actions"]
     assert (actions["can_edit"], actions["can_delete"], actions["can_comment"]) == (True, True, True)
@@ -146,7 +148,7 @@ def test_removing_the_assignee_from_the_team_makes_the_task_an_orphan(directory,
 # ---- edit, move, comment, delete ----
 
 def test_patch_changes_only_what_is_sent_and_null_clears_the_date(directory, npi):
-    task = create(directory, npi, due_at="2026-10-30", description="keep me")
+    task = create(directory, npi, due_at=DUE, description="keep me")
 
     res = directory.call(npi["asha"], "PATCH", f"/tasks/{task['id']}", json={"title": "New title", "due_at": None})
 
