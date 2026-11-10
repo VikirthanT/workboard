@@ -89,7 +89,10 @@ container. That keeps the edit-and-see loop fast.
 1. **`Dockerfile.nginx`**: the two stages above.
 2. **`nginx/nginx.conf`** (HTTP, port 80): serve `dist/` with the `index.html` fallback; `location /api/` proxies to
    `server:8000` with the usual forwarded headers; gzip; one-year cache on built assets; `server_tokens off`;
-   the security headers that need no HTTPS (the strict ones, HSTS and a tight CSP, wait for HTTPS).
+   the security headers: nosniff, no framing, referrer policy, HSTS (browsers ignore it on plain HTTP, so it only
+   takes effect once HTTPS is in front), a Permissions-Policy that switches off camera, microphone, location, payment
+   and USB, and a tight Content-Security-Policy (self only; the one inline theme script is allowed by its hash, which
+   `server/tests/test_deployment_config.py` keeps in step with `client/index.html`).
 3. **`docker-compose.yml`**: add an `nginx` service (builds `Dockerfile.nginx`, publishes port 80, starts after the
    API is healthy). The API and database stay unpublished.
 4. **`.dockerignore`** allow-list gains `client/` (without `node_modules`, `dist`) for the build.
@@ -104,6 +107,45 @@ container. That keeps the edit-and-see loop fast.
 - **Google needs HTTPS.** Google only accepts a plain-HTTP redirect address for `localhost`. For a real address it
   must be HTTPS, which needs a domain and a certificate. So HTTP is fine for building and testing the containers,
   but it is a stopgap: HTTPS is not optional once Google sign-in goes in.
+
+## What the public door (nginx) enforces on its own
+These are checked by `server/tests/test_deployment_config.py`, so a later edit cannot quietly drop them.
+- **The development sign-in cannot be used from outside.** The API treats the request header `X-Dev-User-Email` as "I
+  am this person" when `DEV_AUTH` is on. nginx blanks that header on every `/api/` location and answers `/api/dev/...`
+  (the dev account list) with 404. `docker-compose.yml` also forces `DEV_AUTH` off; this is the second lock.
+- **The API's docs pages are not public.** `/docs`, `/redoc` and `/openapi.json` answer 404 (without this the frontend
+  would answer them with its `index.html` and a 200, which scanners report as an exposed docs page).
+- **Request bodies are capped:** 1 MB everywhere, 3 MB on the bulk upload (the API itself allows a 2 MB file).
+- **The access log holds the path, never the query string**, because the one-time sign-in code travels in `?code=`.
+- **Security headers on every response, including errors:** nosniff, no framing, referrer policy, HSTS, Permissions-Policy
+  and the content-security policy.
+
+- **Rate limits per visitor address:** 600 requests a minute (burst 200) across `/api/`, and 30 a minute (burst 15) on
+  `/api/auth/`, the sign-in endpoints; over the limit is a 429. The app adds limits per login on top (see
+  `server/auth/README.md`).
+- **Which address is "the visitor":** the layer in front of this container (the one that ends TLS) puts the visitor's
+  address in `X-Forwarded-For`. nginx believes that header only from private addresses (10/8, 172.16/12, 192.168/16,
+  127.0.0.1) and counts the last entry that is not one, so a visitor cannot change the address counted by writing a
+  fake one into the header. Tested: 40 requests with 40 different fake leftmost addresses still hit the same limit.
+  **Check after deploying** that the limit sees real addresses and not the front layer's: the access log's first column
+  should show visitors' addresses. If it shows one private address for everybody, the front layer is not sending
+  `X-Forwarded-For` (add `proxy_set_header X-Forwarded-For $remote_addr;` there), and every visitor would share one limit.
+  Visitors on the office's own private network are skipped over like the proxy and share one limit; naming the front
+  layer's exact address in `set_real_ip_from` instead of the private ranges removes that.
+- **Containers:** every service drops all Linux capabilities and keeps only what its image needs (nginx: CHOWN, SETUID,
+  SETGID, NET_BIND_SERVICE; Postgres: CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER; the API: none), with
+  `no-new-privileges`. Tested on fresh containers, and for Postgres on a fresh and an existing data volume.
+
+### Not done, and why
+- **Separate database logins.** The API connects as the database owner, so a bug in it could drop the audit log's
+  append-only triggers. The fix is a second, limited login for the API (read and write rows, no schema changes) with the
+  owner kept for migrations. It needs a one-time change on the live database, which cannot be made from the compose file
+  (those scripts only run on an empty volume), so it is left for a planned maintenance step.
+- **Pinning container images by digest** (today they are pinned by version tag). Worth doing with an update routine
+  so the pins do not go stale.
+- **Rate limits shared between the two API workers.** The per-login counters are in each worker's memory, so a
+  person's real ceiling is up to twice the stated number. Fine for the intended use; move them to the database if they
+  ever have to be exact.
 
 ## Google sign-in: what it needs
 
@@ -141,4 +183,4 @@ token is sent as `Authorization: Bearer` on every call.
 
 ## Later: HTTPS (when there is a domain)
 Add the certificate step (certbot / Let's Encrypt, as in MDM): port 443, a redirect from 80, `SERVER_DOMAIN` in
-`.env`, HSTS and a strict content-security policy. Only the nginx config and compose file change.
+`.env`. HSTS and the content-security policy are already in the nginx config. Only the nginx config and compose file change.

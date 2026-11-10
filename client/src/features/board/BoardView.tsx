@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ChartBar, Eye, Plus, UsersThree } from '@phosphor-icons/react';
+import { ChartBar, Eye, Plus, UploadSimple, UsersThree } from '@phosphor-icons/react';
 import { ErrorBoundary } from '../../app/components/ErrorBoundary';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
@@ -11,13 +11,14 @@ import { EmptyState } from '../../app/components/ui/empty-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../app/components/ui/select';
 import { useToast } from '../../app/components/ui/toast';
 import { slugify } from '../../app/lib/slug';
-import { STATUS_LABEL, type BoardFilter, type Me, type Task, type TeamRecord, type Transition } from '../../app/types/types';
+import { STATUS_LABEL, type BoardFilter, type ColumnSizes, type Me, type Task, type TeamRecord, type Transition } from '../../app/types/types';
 import { useCurrentUser } from '../../hooks';
 import { errorMessage } from '../../services/api';
 import { useTeams } from '../admin';
 import { NoTeamPage } from '../team';
 import { OrphanBanner } from './components/BoardPanels';
 import { FilterMenu } from './components/FilterMenu';
+import { ImportDialog } from './components/ImportDialog';
 import { KanbanBoard } from './components/KanbanBoard';
 import { ReasonDialog } from './components/ReasonDialog';
 import { ReportDialog } from './components/ReportDialog';
@@ -73,7 +74,8 @@ const teamOption = (t: TeamRecord) => `${t.name} (${t.manager?.displayName ?? 'N
 function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamId?: string }) {
   const p = useBoardParams(teamId);
   const navigate = useNavigate();
-  const board = useBoard(p.query);
+  const [sizes, setSizes] = useState<ColumnSizes>({});
+  const board = useBoard(p.query, sizes);
   const move = useMoveTask();
   const { toast } = useToast();
 
@@ -81,6 +83,7 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
   const [pending, setPending] = useState<{ task: Task; transition: Transition } | null>(null);
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   function runTransition(task: Task, tr: Transition) {
     if (tr.needsReason) {
@@ -165,6 +168,12 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
             Report
           </Button>
           {!readOnly && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <UploadSimple size={14} aria-hidden />
+              Import
+            </Button>
+          )}
+          {!readOnly && (
             <Button onClick={() => setForm({})}>
               <Plus size={14} aria-hidden />
               Add task
@@ -215,7 +224,16 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
       {board.isError && <p role="alert" className="text-base text-danger-ink">{errorMessage(board.error, 'Could not load the board.')}</p>}
 
       <ErrorBoundary label="The board">
-        <KanbanBoard tasks={tasks} onOpen={p.openTask} onTransition={runTransition} onBlockedDrop={rejectDrop} readOnly={readOnly} />
+        <KanbanBoard
+          tasks={tasks}
+          columnTotals={board.data.columnTotals}
+          sizes={sizes}
+          onSizesChange={setSizes}
+          onOpen={p.openTask}
+          onTransition={runTransition}
+          onBlockedDrop={rejectDrop}
+          readOnly={readOnly}
+        />
       </ErrorBoundary>
 
       <TaskDetailSheet
@@ -234,6 +252,13 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
         onClose={(saved) => {
           setForm(null);
           if (saved) toast(form?.task ? 'Task updated.' : 'Task added.', 'success');
+        }}
+      />
+      <ImportDialog
+        open={importOpen}
+        onClose={(created) => {
+          setImportOpen(false);
+          if (created) toast(`${created} ${created === 1 ? 'task' : 'tasks'} added.`, 'success');
         }}
       />
       <ReportDialog open={reportOpen} query={p.query} canAllTeams={me.isAdmin} onClose={() => setReportOpen(false)} />

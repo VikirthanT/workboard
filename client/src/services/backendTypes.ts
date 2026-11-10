@@ -66,6 +66,8 @@ export interface WireTask {
   /** Null only if the person row is gone (the server never deletes people, it marks them inactive). */
   creator: WirePersonSummary | null;
   assignee: WirePersonSummary | null;
+  support: WirePersonSummary | null;
+  project: string | null;
   returned_count: number;
   created_at: string;
   updated_at: string;
@@ -104,10 +106,24 @@ export interface WireBoardTeam {
   manager: WirePersonSummary | null;
 }
 
+export interface WireImportPreviewRow {
+  row: number;
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  assignee: string;
+  support: string | null;
+  project: string | null;
+  stage: string | null;
+  start_at: string | null;
+  due_at: string | null;
+}
+
 export interface WireBoard {
   team: WireBoardTeam;
   read_only: boolean;
   tasks: WireTask[];
+  column_totals: Record<'todo' | 'in_progress' | 'blocked' | 'review' | 'done', number>;
   people: WirePersonSummary[];
   filter_counts: Record<string, number>;
   attention_count: number;

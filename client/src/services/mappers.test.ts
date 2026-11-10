@@ -9,7 +9,7 @@ const asha = { id: 'p-asha', name: 'Asha', email: 'asha@atimotors.com', active: 
 
 const serverTask = (over: Partial<WireTask> = {}): WireTask => ({
   id: 't1', team_id: 'team1', title: 'Wire harness', description: '', status: 'blocked', priority: 'high', due_at: '2026-10-30',
-  creator: asha, assignee: ravi, returned_count: 0,
+  creator: asha, assignee: ravi, support: null, project: null, returned_count: 0,
   created_at: '2026-10-17T08:00:00Z', updated_at: '2026-10-17T09:00:00Z', closed_at: null,
   overdue: false, due_soon: true, needs_reassignment: false, returned: false,
   latest_reason: { kind: 'blocked', note: 'waiting on supplier', at: '2026-10-17T09:00:00Z', actor_name: 'Asha' },
@@ -29,6 +29,15 @@ describe('server task -> client task', () => {
     expect(task.latestReason).toEqual({ kind: 'blocked', note: 'waiting on supplier', at: '2026-10-17T09:00:00Z', actorName: 'Asha' });
     expect(task.actions.transitions).toEqual([{ to: 'in_progress', kind: 'resume', label: 'Resume', needsReason: false }]);
     expect(task.dueSoon).toBe(true);
+  });
+
+  it('maps the optional support person and project, and keeps them null when not set', () => {
+    expect(mapTask(serverTask())).toMatchObject({ support: null, project: null });
+
+    const task = mapTask(serverTask({ support: asha, project: 'P1' }));
+
+    expect(task.support?.displayName).toBe('Asha');
+    expect(task.project).toBe('P1');
   });
 
   it('shows a placeholder instead of crashing when the assignee is missing', () => {

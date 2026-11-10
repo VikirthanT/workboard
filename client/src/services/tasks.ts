@@ -1,21 +1,24 @@
-import type { ActivityItem, Board, BoardQuery, Task, TaskDetail, TaskInput, Status } from '../app/types/types';
+import { BOARD_PAGE, type ActivityItem, type Board, type BoardQuery, type ColumnSizes, type Task, type TaskDetail, type TaskInput, type Status } from '../app/types/types';
 import type { WireActivity, WireBoard, WireTask, WireTaskDetail } from './backendTypes';
 import { apiClient } from './axiosInstance';
 import { mapActivity, mapBoardTeam, mapSummary, mapTask } from './mappers';
 
-export async function getBoard(q: BoardQuery): Promise<Board> {
+export async function getBoard(q: BoardQuery, sizes: ColumnSizes = {}): Promise<Board> {
   const { data } = await apiClient.get<WireBoard>('/board', {
     params: {
       team: q.teamId ?? undefined,
       attention: q.attention || undefined,
       person: q.personId ?? undefined,
       filter: q.filters.join(',') || undefined,
+      limit: BOARD_PAGE,
+      show: Object.entries(sizes).map(([status, n]) => `${status}:${n}`).join(',') || undefined,
     },
   });
   return {
     team: mapBoardTeam(data.team),
     readOnly: data.read_only,
     tasks: data.tasks.map(mapTask),
+    columnTotals: data.column_totals,
     people: data.people.map(mapSummary),
     filterCounts: data.filter_counts as Board['filterCounts'],
     attentionCount: data.attention_count,
@@ -35,6 +38,8 @@ const toWireInput = (i: Partial<TaskInput>) => ({
   priority: i.priority,
   due_at: i.dueAt,
   assignee_id: i.assigneeId,
+  support_id: i.supportId,
+  project: i.project,
 });
 
 export async function createTask(input: TaskInput): Promise<Task> {

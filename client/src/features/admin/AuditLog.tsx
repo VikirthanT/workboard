@@ -6,7 +6,7 @@ import { Button } from '../../app/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../app/components/ui/table';
 import { formatDateTime } from '../../app/lib/format';
 import { errorMessage } from '../../services/api';
-import { describeAudit, pageRange } from './auditText';
+import { auditReason, describeAudit, pageRange } from './auditText';
 import { useAudit } from './hooks';
 
 /** Every team and access change, newest first, fifty at a time. Read-only: the database refuses edits and deletes. */
@@ -30,9 +30,9 @@ export function AuditLog() {
             {items.map((e) => (
               <TableRow key={e.id}>
                 <TableCell className="tabular-nums">{formatDateTime(e.createdAt)}</TableCell>
-                <TableCell>{e.actorName ?? 'System'}</TableCell>
+                <TableCell>{e.actorName ?? (e.action === 'auth.login_failed' ? 'Not signed in' : 'System')}</TableCell>
                 <TableCell className="whitespace-normal font-medium text-ink">{describeAudit(e)}</TableCell>
-                <TableCell className="whitespace-normal">{e.reason ?? <span className="text-ink-subtle">No reason given</span>}</TableCell>
+                <TableCell className="whitespace-normal">{auditReason(e) ?? <span className="text-ink-subtle">No reason given</span>}</TableCell>
               </TableRow>
             ))}
             {items.length === 0 && <TableRow><TableCell colSpan={4} className="py-10 text-center text-ink-subtle">No changes yet.</TableCell></TableRow>}

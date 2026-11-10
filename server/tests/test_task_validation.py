@@ -61,7 +61,7 @@ def test_priority_defaults_to_medium_and_description_to_empty(directory, npi):
 
 
 @pytest.mark.parametrize("due,expected", [
-    ("2026-10-30", 201), (None, 201), ("2028-02-29", 201),
+    ((date.today() + timedelta(days=30)).isoformat(), 201), (None, 201), ("2028-02-29", 201),
     ("2026-02-30", 422), ("30/10/2026", 422), ("2026-13-01", 422), ("", 422), ("soon", 422),
 ], ids=["a date", "none", "leap day", "no such day", "wrong format", "no such month", "empty", "text"])
 def test_due_date_must_be_a_real_date_or_null(directory, npi, due, expected):

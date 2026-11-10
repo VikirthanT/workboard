@@ -149,6 +149,9 @@ export interface Task {
   dueAt: string | null;
   creator: PersonSummary;
   assignee: PersonSummary;
+  /** Optional helper, anyone active in the directory (not only the team). */
+  support: PersonSummary | null;
+  project: string | null;
   returnedCount: number;
   createdAt: string;
   updatedAt: string;
@@ -205,7 +208,13 @@ export interface BoardQuery {
   filters: BoardFilter[];
 }
 
-export type BoardStats = Record<'todo' | 'in_progress' | 'blocked' | 'overdue' | 'done', number>;
+/** Cards a column shows at first, and how many more each "Load more" fetches. */
+export const BOARD_PAGE = 5;
+
+/** Columns grown by "Load more": how many cards to ask for; a column not listed gets `BOARD_PAGE`. */
+export type ColumnSizes = Partial<Record<Status, number>>;
+
+export type BoardStats =Record<'todo' | 'in_progress' | 'blocked' | 'overdue' | 'done', number>;
 
 /** The team a board belongs to: just what the board header shows. */
 export interface BoardTeam {
@@ -221,7 +230,10 @@ export interface Board {
   readOnly: boolean;
   /** Task counts for everything on the team (person applied), ignoring attention and filters. */
   stats: BoardStats;
+  /** The cards sent: at most `BOARD_PAGE` per column unless "Load more" asked for more (`ColumnSizes`). */
   tasks: Task[];
+  /** Every card each column holds after the filters, so a column knows how many are still to load. */
+  columnTotals: Record<Status, number>;
   /** People the person dropdown offers: the team's active people. */
   people: PersonSummary[];
   /** How many cards each filter would show in the current view. */
@@ -274,6 +286,30 @@ export interface TaskInput {
   priority: Priority;
   dueAt: string | null;
   assigneeId: string;
+  /** `null` clears it on an edit; left out, it stays as it is. */
+  supportId?: string | null;
+  project?: string | null;
+}
+
+/** One problem in a refused bulk upload; `row` is the row number in the sheet, `column` may be empty. */
+/** One task a bulk upload would add, shown for the manager to confirm before anything is saved. */
+export interface ImportPreviewRow {
+  row: number;
+  title: string;
+  description: string;
+  priority: Priority;
+  assignee: string;
+  support: string | null;
+  project: string | null;
+  stage: string | null;
+  startAt: string | null;
+  dueAt: string | null;
+}
+
+export interface ImportRowError {
+  row: number;
+  column: string;
+  message: string;
 }
 
 // ------------------------------------------------------------ teams / admin

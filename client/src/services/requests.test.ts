@@ -6,7 +6,7 @@ import { addMember, changeManager, createTeam, deleteTeam, getTeamMembers, getTe
 import { getAdmins, getAudit, searchPeople, setAdmin } from './admin';
 import { addComment, createTask, deleteTask, getBoard, getTask, moveTask, updateTask } from './tasks';
 import { getAllTeamsReport, getTeamReport } from './reports';
-import { devSignIn, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
+import { devSignIn, endServerSession, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
 
 vi.mock('./mappers', async (importOriginal) => {
   const real = await importOriginal<typeof import('./mappers')>();
@@ -107,9 +107,9 @@ describe('tasks service', () => {
   it('sends only the board filters that are set', async () => {
     get.mockResolvedValue({ data: board });
     await getBoard({ teamId: null, personId: null, attention: false, filters: [] } as never);
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined } });
-    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'] } as never);
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked' } });
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined, limit: 5, show: undefined } });
+    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'] } as never, { todo: 10, done: 15 });
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked', limit: 5, show: 'todo:10,done:15' } });
   });
 
   it('reads one task with GET /tasks/{id}', async () => {
@@ -161,6 +161,14 @@ describe('auth service', () => {
     get.mockResolvedValue({ data: { token: 'tok', email: 'a@x.test', name: 'A' } });
     expect(await exchangeGoogleCode('abc')).toEqual({ token: 'tok', email: 'a@x.test', name: 'A' });
     expect(get).toHaveBeenCalledWith('/auth/google/exchange', { params: { code: 'abc' } });
+  });
+
+  it('ends the session on the server with POST /auth/logout, sending the token it was given, and never throws', async () => {
+    await endServerSession('tok');
+    expect(post).toHaveBeenCalledWith('/auth/logout', null, { headers: { Authorization: 'Bearer tok' }, timeout: 5000 });
+
+    post.mockRejectedValue(new Error('offline'));
+    await expect(endServerSession('tok')).resolves.toBeUndefined();
   });
 
   it('lists dev accounts and explains a refused one', async () => {

@@ -8,8 +8,10 @@ Rules in one paragraph: a task belongs to one team and is assigned to an active 
 
 | Method and path | Who | File | What it does |
 | --- | --- | --- | --- |
-| `GET /api/board?team=&person=&filter=&attention=` | manager (own team), admin (any, read-only) | `routers/board.py` | The team's cards with their `actions`, the person dropdown, `filter_counts`, `attention_count`, `stats` and `orphans`. `filter` is a comma list of `needs_review`, `overdue`, `blocked`, `due_week`; an unknown one is 422. `attention=true` keeps only what needs the manager. An admin with no team of their own must pass `team`. |
+| `GET /api/board?team=&person=&filter=&attention=&limit=&show=` | manager (own team), admin (any, read-only) | `routers/board.py` | The team's cards with their `actions`, the person dropdown, `filter_counts`, `attention_count`, `stats`, `column_totals` and `orphans`. `filter` is a comma list of `needs_review`, `overdue`, `blocked`, `due_week`; an unknown one is 422. `attention=true` keeps only what needs the manager. An admin with no team of their own must pass `team`. Open columns come overdue first, then soonest due (undated last), then most recently changed; Done most recently closed first. `limit` caps the cards per column (all when left out) and `show=todo:10,done:15` raises it for single columns ("Load more"); a bad `show` is 422 `invalid_show`. The counts always cover every card. |
 | `POST /api/tasks` | the team's manager | `routers/tasks.py` | Create on the caller's own team. Body `{title, description?, priority?, due_at?, assignee_id}`. Returns 201 with the task. |
+| `GET /api/tasks/import/template` | the team's manager | `routers/imports.py` | The `.xlsx` to fill in, built fresh on every download: dropdowns for Priority, Assignee (the caller's active team members) and Support (every active person), shown as `Name (email)` (`Asha K (asha.k@atimotors.com)`; the upload matches on the email only, and still takes a bare username or email typed by hand); a People sheet lists each person, name and Slack ID. Dates show as `30-Nov-2030` and Excel refuses a non-date or a past due date as you type. Row 2 is a grey example whose Title starts `[EXAMPLE]`; the upload skips any row that does. |
+| `POST /api/tasks/import` | the team's manager | `routers/imports.py` | Multipart `file` (the filled-in `.xlsx`, at most 2 MB and 500 rows). The caller is identified before the body is read (the handler reads the form itself), so an anonymous request gets 401 and never reaches the multipart parser; a malformed body from a signed-in manager is 400, and a request with no `file` field is 422 `invalid_file`. Creates every task on the caller's team in one transaction, or none. 201 `{created}`. `?preview=true` runs every check and saves nothing: 200 `{tasks: [{row, title, description, priority, assignee, support, project, stage, start_at, due_at}]}` (people by name), shown to the manager before they confirm. `?rows=2,5` adds only those sheet rows (the ones ticked in the preview); a number that is not one of the sheet's tasks is 422 `invalid_rows`. 422 `import_invalid` with `errors: [{row, column, message}]`. Dates are real Excel dates, or text read day first (`30-Nov-2030`, `30/11/2030`, `2030-11-30`); a blank Start date is the day of the upload. The sheet is checked first; task rules (past due date, start after due) are checked per row only once the sheet itself is clean. |
 | `GET /api/tasks/{id}` | manager of that team, any admin | `routers/tasks.py` | The task and its timeline (oldest first, comments included). |
 | `PATCH /api/tasks/{id}` | the team's manager | `routers/tasks.py` | Change only the fields sent; `due_at: null` clears the date. One timeline entry per field that really changed; a new assignee is a `reassign` entry and also a `task.reassign` row in the audit log. A due date cannot be set in the past (422 `due_date_past`; keeping an old date or clearing it is fine). A Done task cannot be edited or reassigned (409 `task_done`; reopen it first). |
 | `DELETE /api/tasks/{id}` | the team's manager | `routers/tasks.py` | Only while To Do or In Progress. The timeline goes with it, but a `task.delete` row in the append-only audit log first keeps a snapshot (title, status, priority, due date, assignee, and the whole timeline). Returns 204. |
@@ -30,7 +32,7 @@ Every failure is `{"detail": {"code", "message"}}`; match on `code`.
 | 403 | `forbidden` (not this team's manager, or not allowed to read it), `no_team` |
 | 404 | `task_not_found`, `team_not_found`, `activity_not_found` |
 | 409 | `invalid_transition`, `not_deletable`, `task_done` |
-| 422 | `reason_required`, `title_required`, `comment_required`, `invalid_assignee`, `unknown_filter`, `invalid_range`, `invalid_input` (text the database cannot store, such as a NUL character). A malformed body, id or date is also 422, in FastAPI's own shape. |
+| 422 | `import_invalid`, `invalid_file`, `empty_file`, `too_many_rows`, `file_too_large` (bulk upload), `reason_required`, `title_required`, `comment_required`, `invalid_assignee`, `unknown_filter`, `invalid_range`, `invalid_input` (text the database cannot store, such as a NUL character). A malformed body, id or date is also 422, in FastAPI's own shape. |
 
 ## Folder map
 
@@ -39,12 +41,15 @@ server/tasks/
 ├── routers/
 │   ├── __init__.py        assembles the one `router` (board + reports + tasks)
 │   ├── board.py           GET /board
+│   ├── imports.py         GET /tasks/import/template, POST /tasks/import (before tasks.py)
 │   ├── reports.py         GET /reports/team
 │   └── tasks.py           the task endpoints
 ├── services/
-│   ├── lookup.py          get_task, get_task_and_team (404 if missing)
+│   ├── lookup.py          get_task, get_task_and_team (404 if missing), own_team
+│   ├── import_template.py the spreadsheet template and the "Name (email)" labels
+│   ├── import_parse.py    parse_upload: the sheet into rows, with per-row errors
 │   ├── activity.py        record one timeline entry (adds the row; the command commits)
-│   ├── commands.py        create_task, update_task, delete_task, move_task, add_comment
+│   ├── commands.py        create_task, import_tasks, update_task, delete_task, move_task, add_comment
 │   ├── queries.py         resolve_board_team, get_board, get_task, get_task_detail, get_activity
 │   └── report.py          report_counts (pure), get_team_report
 ├── rules.py               overdue, due soon, due this week, needs a new owner, needs attention (pure)

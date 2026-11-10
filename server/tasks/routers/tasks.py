@@ -34,7 +34,10 @@ def create_task(body: schemas.TaskCreate, db: Session = Depends(get_db), actor: 
     Errors: 422 `invalid_assignee`, 422 `title_required`; 404 `person_not_found` for an unknown assignee id.
     """
     task_id = uuid.uuid4()
-    commands.create_task(db, actor, task_id, body.title, body.description, body.priority, body.due_at, body.assignee_id)
+    commands.create_task(
+        db, actor, task_id, body.title, body.description, body.priority, body.due_at, body.assignee_id,
+        support_id=body.support_id, project=body.project, stage=body.stage, start_at=body.start_at,
+    )
     return queries.get_task(db, actor, task_id)
 
 

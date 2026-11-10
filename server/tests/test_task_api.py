@@ -9,6 +9,8 @@ from models import Task
 from tasks.services import queries
 from tests.conftest import make_team
 
+DUE = (date.today() + timedelta(days=30)).isoformat()  # a due date can never be in the past, so it moves with the clock
+
 
 def create(directory, npi, **fields):
     body = {"title": "Wire harness", "assignee_id": str(npi["ravi"].id), **fields}
@@ -32,10 +34,10 @@ def board(directory, who, query=""):
 # ---- create and read ----
 
 def test_create_returns_the_task_with_the_actions_its_manager_has(directory, npi):
-    task = create(directory, npi, priority="high", due_at="2026-10-30")
+    task = create(directory, npi, priority="high", due_at=DUE)
 
     assert (task["status"], task["priority"], task["due_at"], task["assignee"]["name"], task["creator"]["name"]) == (
-        "todo", "high", "2026-10-30", "Ravi", "Asha",
+        "todo", "high", DUE, "Ravi", "Asha",
     )
     actions = task["actions"]
     assert (actions["can_edit"], actions["can_delete"], actions["can_comment"]) == (True, True, True)
@@ -48,7 +50,7 @@ def test_the_board_lists_the_teams_cards_with_people_and_counts(directory, npi):
 
     result = board(directory, npi["asha"])
 
-    assert [t["title"] for t in result["tasks"]] == ["A", "B"]
+    assert [t["title"] for t in result["tasks"]] == ["B", "A"]  # both undated: the most recently changed first
     assert result["team"]["name"] == "NPI" and result["read_only"] is False
     assert {p["name"] for p in result["people"]} == {"Asha", "Ravi"}
     assert result["stats"] == {"todo": 2, "in_progress": 0, "blocked": 0, "overdue": 0, "done": 0}
@@ -133,6 +135,39 @@ def test_done_cards_stay_on_the_board_the_most_recently_closed_first_after_the_o
     assert result["stats"]["done"] == 2 and open_card
 
 
+def test_open_cards_come_overdue_first_then_soonest_due_then_undated(directory, db, npi):
+    later = (date.today() + timedelta(days=40)).isoformat()
+    create(directory, npi, title="Undated")
+    create(directory, npi, title="Later", due_at=later)
+    create(directory, npi, title="Soon", due_at=DUE)
+    create(directory, npi, title="Late", due_at=DUE)
+    db.query(Task).filter(Task.title == "Late").update({"due_at": date.today() - timedelta(days=1)})  # passed since it was set
+    db.commit()
+
+    assert [t["title"] for t in board(directory, npi["asha"])["tasks"]] == ["Late", "Soon", "Later", "Undated"]
+
+
+def test_limit_caps_each_column_and_show_loads_more_of_one(directory, npi):
+    for n in range(7):
+        create(directory, npi, title=f"T{n}")
+    move(directory, npi, create(directory, npi, title="Started"), "in_progress")
+
+    capped = board(directory, npi["asha"], "?limit=5")
+    more = board(directory, npi["asha"], "?limit=5&show=todo:10")
+
+    assert [t["status"] for t in capped["tasks"]].count("todo") == 5 and len(capped["tasks"]) == 6
+    assert capped["column_totals"] == {"todo": 7, "in_progress": 1, "blocked": 0, "review": 0, "done": 0}
+    assert [t["status"] for t in more["tasks"]].count("todo") == 7
+    assert capped["stats"]["todo"] == 7  # the counts still cover every card
+
+
+@pytest.mark.parametrize("show", ["nope:5", "todo:x", "todo:0", "todo:501", "todo"])
+def test_a_bad_show_is_refused(directory, npi, show):
+    res = directory.call(npi["asha"], "GET", f"/board?limit=5&show={show}")
+
+    assert (res.status_code, res.json()["detail"]["code"]) == (422, "invalid_show")
+
+
 def test_removing_the_assignee_from_the_team_makes_the_task_an_orphan(directory, npi):
     task = create(directory, npi)
 
@@ -146,7 +181,7 @@ def test_removing_the_assignee_from_the_team_makes_the_task_an_orphan(directory,
 # ---- edit, move, comment, delete ----
 
 def test_patch_changes_only_what_is_sent_and_null_clears_the_date(directory, npi):
-    task = create(directory, npi, due_at="2026-10-30", description="keep me")
+    task = create(directory, npi, due_at=DUE, description="keep me")
 
     res = directory.call(npi["asha"], "PATCH", f"/tasks/{task['id']}", json={"title": "New title", "due_at": None})
 

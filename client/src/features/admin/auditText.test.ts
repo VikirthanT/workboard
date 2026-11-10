@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEntry } from '../../app/types/types';
-import { describeAudit, pageRange } from './auditText';
+import { auditReason, describeAudit, pageRange } from './auditText';
 
 const entry = (action: string, extra: Partial<AuditEntry> = {}): AuditEntry => ({
   id: '1', action, actorName: 'Admin', personName: 'Ravi', teamName: 'NPI', reason: null, details: null, createdAt: '2026-10-17T10:00:00Z', ...extra,
@@ -15,7 +15,17 @@ describe('describeAudit', () => {
     ['member.remove', 'Removed Ravi from NPI'],
     ['admin.grant', 'Made Ravi an admin'],
     ['admin.revoke', 'Revoked admin from Ravi'],
+    ['auth.login', 'Signed in'],
   ])('%s reads as a sentence', (action, text) => expect(describeAudit(entry(action))).toBe(text));
+
+  it('names the email of a refused sign-in and gives its reason in words', () => {
+    const refused = entry('auth.login_failed', { actorName: null, reason: 'domain_not_allowed', details: { email: 'x@gmail.com' } });
+    expect(describeAudit(refused)).toBe('Sign-in refused for x@gmail.com');
+    expect(auditReason(refused)).toBe('Not a company account');
+    expect(auditReason(entry('auth.login_failed', { reason: 'not_onboarded' }))).toBe('Not set up as a manager or admin');
+    expect(auditReason(entry('auth.login'))).toBe('–');
+    expect(auditReason(entry('member.add', { reason: 'new hire' }))).toBe('new hire');
+  });
 
   it('says "someone" or "a team" when the person or team is gone', () => {
     expect(describeAudit(entry('member.add', { personName: null, teamName: null }))).toBe('Added someone to a team');

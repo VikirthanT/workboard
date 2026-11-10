@@ -11,6 +11,11 @@ ADMIN_REVOKE = "admin.revoke"
 TASK_DELETE = "task.delete"
 TASK_REASSIGN = "task.reassign"
 
+# Written by the auth feature when someone signs in with Google: the actor is the person, nothing else is stored.
+AUTH_LOGIN = "auth.login"
+# A refused sign-in by someone Google has verified (the reason is the error code; the email is in `details`).
+AUTH_LOGIN_FAILED = "auth.login_failed"
+
 MAX_REASON_LENGTH = 500
 
 # Slack ids of the development demo accounts (seed/demo_db.py) start with this. The directory load leaves them alone.

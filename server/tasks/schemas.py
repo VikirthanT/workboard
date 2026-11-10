@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tasks.states import MAX_COMMENT_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH
+from tasks.states import MAX_COMMENT_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_LABEL_LENGTH, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH
 
 Priority = Literal["low", "medium", "high"]
 Status = Literal["todo", "in_progress", "blocked", "review", "done"]
@@ -16,16 +16,25 @@ class TaskCreate(BaseModel):
     priority: Priority = "medium"
     due_at: date | None = None
     assignee_id: uuid.UUID
+    support_id: uuid.UUID | None = None
+    project: str | None = Field(default=None, max_length=MAX_LABEL_LENGTH)
+    stage: str | None = Field(default=None, max_length=MAX_LABEL_LENGTH)
+    start_at: date | None = None
 
 
 class TaskUpdate(BaseModel):
-    """Send only what changes: a field left out stays as it is, `due_at: null` clears the date."""
+    """Send only what changes: a field left out stays as it is, `due_at: null` clears the date.
+    The same goes for `support_id`, `project`, `stage` and `start_at`: null clears them."""
 
     title: str | None = Field(default=None, min_length=1, max_length=MAX_TITLE_LENGTH)
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     priority: Priority | None = None
     due_at: date | None = None
     assignee_id: uuid.UUID | None = None
+    support_id: uuid.UUID | None = None
+    project: str | None = Field(default=None, max_length=MAX_LABEL_LENGTH)
+    stage: str | None = Field(default=None, max_length=MAX_LABEL_LENGTH)
+    start_at: date | None = None
 
 
 class StatusMove(BaseModel):
@@ -83,8 +92,12 @@ class TaskResponse(BaseModel):
     status: Status
     priority: Priority
     due_at: date | None
+    start_at: date | None
     creator: PersonSummary | None
     assignee: PersonSummary | None
+    support: PersonSummary | None
+    project: str | None
+    stage: str | None
     returned_count: int
     created_at: datetime
     updated_at: datetime
@@ -182,6 +195,7 @@ class Board(BaseModel):
     team: BoardTeam
     read_only: bool  # an admin looking at a team they do not run
     tasks: list[TaskResponse]
+    column_totals: dict[str, int]  # cards per column after the filters, before `limit`: "Load more" knows what is left
     people: list[PersonSummary]  # the team's active people, for the person dropdown
     filter_counts: dict[str, int]
     attention_count: int

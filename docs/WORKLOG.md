@@ -6,15 +6,15 @@ Day-by-day record for people who were not there. Newest entry first. Commit ids 
 
 | Area | State |
 |---|---|
-| Managers-only model (users vs people, teams, one-to-one cardinality) | Done; the rules live on the server only (`security/authorization.py`), 605 server tests |
+| Managers-only model (users vs people, teams, one-to-one cardinality) | Done; the rules live on the server only (`security/authorization.py`), 739 server tests (10 Nov, later) |
 | Admin Teams portal (`/admin`) | Rebuilt on the real API (17 Oct): grouped collapsible teams, search, role filter, Manager / Member dropdown, Admin tick, dustbin, create / delete team, paged audit log. Looked at in a browser, light and dark (Teams tab light, Audit tab dark); dialogs not yet clicked through; no component tests yet |
 | Manager My team (`/team`) and "No team yet" page | My team rebuilt on the real API (search, add, dustbin); not yet looked at in a browser after the rebuild |
-| Board (one per team) | On the real API; home for every role; drag to move (Resume button on a blocked task); admins may comment on any board; looked at in a browser, light and dark. Some of 17 Oct's changes (admin comments, delete / reassign audit) not yet looked at in a browser |
+| Board (one per team) | On the real API; home for every role; drag to move (Resume button on a blocked task); admins may comment on any board; five cards per column with "Load more" and a five-minute client cache (10 Nov); looked at in a browser, light and dark. Some of 17 Oct's changes (admin comments, delete / reassign audit) and all of 10 Nov's (paging, import confirmation) not yet looked at in a browser |
 | Standup suggestions (inbox, lifecycle rules, standup-DB reader and Groq extraction design) and the weekly handover note | Moved out of this branch to the snapshot folder `workboard-suggestions-snapshot`, to come back on a later branch |
-| Backend (FastAPI + Postgres) | Identity (people, teams, admin, audit), tasks (tasks, timeline, comments, board query, team reports) and auth (Google sign-in, signed tokens) built; 605 server tests pass with 100% line and branch coverage of the app code (Google faked). The frontend talks to it for everything. Google sign-in not yet tried against real Google. |
+| Backend (FastAPI + Postgres) | Identity (people, teams, admin, audit), tasks (tasks, timeline, comments, board query, team reports) and auth (Google sign-in, signed tokens) built, plus bulk import from Excel, sign-out of every session, sign-in audit and rate limits (10 Nov), board paging and import confirmation (10 Nov, later); 739 server tests pass (10 Nov, later; coverage last measured at 100% on 19 Oct, not re-measured) (Google faked). The frontend talks to it for everything. Google sign-in not yet tried against real Google. |
 | Local setup and production stack | `.env` (copy `.env.example`) drives `make dev` and `make prod-up`; the database password and URL are in no source file; `docker-compose.dev.yml`, `docker-compose.yml` (prod) and `Dockerfile.api` added |
 | Slack bot and the weekly Slack directory pull (both Phase 2) | Not started; data model carries `accepted_at` and comment `source`; until the pull exists the directory loads from a file (`make db-seed`) |
-| Frontend tests | 180 vitest tests (pure code, error boundary, `services/requests.test.ts` pinning every service route, and component tests for every item in `refdocs/checklist.md` 4.2: team components, dialogs, admin screens, task form and sheet, `DatePicker`, `Select`, login page); `make test` also guards the production bundle. Rest of the component tests in progress (`refdocs/checklist.md` 4.2) |
+| Frontend tests | 198 vitest tests on 10 Nov, later (pure code, error boundary, `services/requests.test.ts` pinning every service route, and component tests for every item in `refdocs/checklist.md` 4.2: team components, dialogs, admin screens, task form and sheet, `DatePicker`, `Select`, login page); `make test` also guards the production bundle. Rest of the component tests in progress (`refdocs/checklist.md` 4.2) |
 | Playwright specs | Set up (19 Oct): `make e2e`, two smoke specs (admin creates a team and reads the audit log; manager adds a task and drags it), on a throwaway database; not part of `make test` |
 | What is left | `refdocs/checklist.md` is the working list for the coming days |
 
@@ -37,6 +37,10 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 
 ## Decisions and why
 
+- **10 Nov: the board loads five cards per column, and "Load more" adds five (decided with the user).** Not page numbers: on a Kanban board a page hides the cards above it and cards jump between pages as they move, so new cards are added below the ones shown. The server sorts, so the first five are the most urgent.
+- **10 Nov: board data is kept for five minutes on the client (decided with the user).** Your own changes refresh it at once; others' show on tab focus, a reload, or within five minutes. No Refresh button: a browser reload does it. Shorten this in Phase 2, when Slack (Accept, comments) changes cards from outside (`BOARD_FRESH_MS` in `client/src/features/board/hooks/useBoard.ts`).
+- **10 Nov: a bulk import is listed and confirmed before anything is saved (decided with the user).** Every task starts ticked; unticked ones are left out.
+
 - **19 Oct: the API runs in IST.** One site, in India, so "today" (due dates, overdue, `completed_on`, reports) is the Indian date, from the server's clock via `TZ=Asia/Kolkata` (image, `make api-dev`, e2e, tests). Revisit with a timezone setting if a second site appears.
 - **16 Oct: managers only.** The brief limits Phase 1 to the Engineering managers; team members never sign in. Keka, reporting lines, member boards and self-created tasks are removed.
 - **16 Oct: one team has one manager, a manager runs one team, a person is on one team, one board per team (decided with the user, Phase 1).** Keeps suggestion routing and the board unambiguous. Revisit for shared boards or people on several teams.
@@ -57,6 +61,39 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Person:** a people-directory entry (name, email, Slack ID). Never signs in; an assignee.
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
+
+## 10 Nov 2026 (later): board loads five per column, import confirmation, template labels
+
+**Summary.** On `dev`: the board loads five cards per column, most urgent first, with "Load more" adding five at a time, and keeps its data for five minutes. The bulk import now lists the tasks before adding anything, with a tick box per task and a click for its details. The template's people dropdowns show "Name (email)". Committed on `dev`; not pushed, nothing merged.
+
+**Commits (oldest first).**
+- `7009cf0` (before this session) Merge pull request #1 from VikirthanT/security: the 10 Nov security entry below, merged into `dev` on GitHub.
+- `03ab189` Match the task form's Project box to the dropdown heights (`TaskFormDialog.tsx`: `h-10 py-0` on the Project input and the Support trigger).
+- `bc245d3` Load the board five cards per column, most urgent first. `GET /api/board` takes `limit` and `show` (`todo:10,done:15`; a bad one is 422 `invalid_show`) and returns `column_totals` (`server/tasks/routers/board.py`, `services/queries.py`); the server now sorts the columns (open: overdue, then soonest due, undated last, then most recently changed; Done: most recently closed). Client: `services/tasks.ts` asks for 5 per column, `KanbanBoard.tsx` shows "Load 5 more (N left)" and "Show less", `useBoard.ts` keeps the board fresh for 5 minutes, `useTaskMutations.ts` moves a card on screen before the server answers.
+- `83edb14` Show bulk-imported tasks for confirmation; add only the ticked ones. `POST /api/tasks/import?preview=true` checks everything and saves nothing; `?rows=2,5` adds only those sheet rows (422 `invalid_rows` otherwise) (`routers/imports.py`, `services/commands.py` dry run, `services/import_parse.py`); a blank Start date is the upload day. Client: `ImportDialog.tsx` (Proceed, the list, tick boxes, details on click, locked while sending), `services/imports.ts`, `usePreviewImport`.
+- `c8da506` Show people as "Name (email)" in the import template dropdowns (`services/import_template.py`); old username-only templates still upload.
+
+**What you will see.** Each board column shows at most five cards, its badge shows the full count, and "Load 5 more" opens the rest five at a time. A dragged card lands in its new column at once. In Import, Proceed shows a list of the tasks, all ticked; untick to leave one out, click a task for its description, then "Add N tasks". The downloaded template lists "Asha K (asha.k@atimotors.com)" in Assignee and Support.
+
+**Checked.** `make test` on the whole change set, run by the user, all passing (earlier runs here: 739 server, 198 frontend). `make typecheck` clean and the AtiUI token grep empty before committing. `bc245d3` and `83edb14` were also type-checked and their client board and services tests run on their own (69 and 72 passing); the server tests were not run commit by commit.
+
+**Not done or not checked.** None of it looked at in a browser, light or dark. A sheet with any bad row still blocks the whole import (bad rows cannot be unticked). A confirmed import uploads the file twice, so the 6-a-minute limit allows 3 imports a minute. "Load more" refetches the whole board at the new sizes, and each request still reads every task on the team to count. Board data from someone else (an admin removing a person, the directory reload, Slack in Phase 2) can take up to five minutes to show unless the tab regains focus or is reloaded. `make e2e` not run. `server/identity/README.md` has an uncommitted blank first line that this session did not make.
+
+
+**Summary.** On the `security` branch: tasks gained an optional Support person and Project, and a manager can add many tasks at once from an Excel template. Sign-in and sessions were hardened (sign out ends every session, Google's signature is checked, sign-ins are audited, rate limits), and nginx and the containers were locked down. The branch was pushed to `origin/security`; nothing was merged.
+
+**Commits (oldest first).**
+- `0e8a528` Upgrade the frontend build and test tools to vite 7 and vitest 4 (`client/package.json`, lock file, `client/vitest.config.ts`).
+- `5bac3cf` Keep task test due dates in the future: the fixed October and November 2026 dates had passed, and a due date cannot be in the past.
+- `8b8127e` Add Support and Project to tasks and a bulk import from Excel. Migration `0004` (`support_id`, `project`, `stage`, `start_at` on `tasks`); `GET /api/tasks/import/template` and `POST /api/tasks/import` in `server/tasks/routers/imports.py` (all or nothing, 2 MB and 500 rows at most, 6 uploads a minute per person); `server/security/rate_limit.py`; client `ImportDialog.tsx`, the Import button on the board, Project and a searchable Support picker in the task form.
+- `67136fb` Harden sign-in, sessions and the production stack. Migration `0005` (`people.session_version`); `POST /api/auth/logout` (`server/auth/routers/session.py`) ends every session of that person; the Google ID token's signature is checked (pyjwt, cryptography); `auth.login` and `auth.login_failed` in the audit log; 300 requests a minute per signed-in person and 10 Google sign-ins per email per 10 minutes (`too_many_attempts`); nginx security headers, CSP, body caps, per-address limits, `/api/dev/` and the docs pages answer 404, no query strings in the access log; `cap_drop: [ALL]` on every production service. New tests: `test_security_surface.py` (every route needs a session), `test_google_signature.py`, `test_logout.py`, `test_rate_limit.py`.
+- `d130c28` Add a three-minute manager walkthrough script (`docs/MANAGER_WALKTHROUGH.md`).
+
+**What you will see.** An Import button next to Add task on a manager's board; Project and Support in the task form, Support on the card and in the task panel; "Signed in" and refused sign-ins in the admin's audit log.
+
+**Checked.** On the whole tree before committing: `make typecheck` clean; `make test` 193 frontend, 725 server, 5 bundle checks, all passed; AtiUI token grep empty. The commits were not tested one by one.
+
+**Not done or not checked.** Google sign-in still not tried against real Google. The nginx per-address limits not checked behind the real front layer (`docs/DEPLOYMENT.md` says what to look at). The import and Support picker not looked at in a browser here (light and dark). `client/vitest.config.ts` caps workers with `poolOptions.forks.maxForks`, which vitest 4 no longer lists (it has `maxWorkers`), so the cap may be ignored. The walkthrough script does not cover Import or Support.
 
 ## 22 Oct 2026: first push to GitHub, nginx stack, favicon
 

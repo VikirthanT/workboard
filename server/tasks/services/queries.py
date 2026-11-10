@@ -9,6 +9,7 @@ filters into SQL if a board ever holds thousands.
 import uuid
 from dataclasses import dataclass
 from datetime import date
+from typing import get_args
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +22,8 @@ from tasks import rules, schemas
 from tasks.services.lookup import get_task_and_team
 
 FILTERS = ("needs_review", "overdue", "blocked", "due_week")
+STATUSES = get_args(schemas.Status)
+MAX_COLUMN_CARDS = 500  # a ceiling for `show`, so one request cannot ask for an unbounded column
 
 
 @dataclass
@@ -86,13 +89,20 @@ def get_board(
     person_id: uuid.UUID | None = None,
     filters: list[str] | None = None,
     attention: bool = False,
+    limit: int | None = None,
+    show: list[str] | None = None,
     today: date | None = None,
 ) -> schemas.Board:
-    """`team` comes from resolve_board_team, which has already checked the actor may read it."""
+    """`team` comes from resolve_board_team, which has already checked the actor may read it.
+
+    `limit` caps the cards sent per column (None sends them all); `show` raises it for single columns,
+    as `status:count` ("todo:15"), for "Load more". Columns come sorted: open ones most urgent first, Done newest first.
+    """
     filters = filters or []
     unknown = [f for f in filters if f not in FILTERS]
     if unknown:
         raise AppError("unknown_filter", f"Unknown filter: {unknown[0]}.", 422)
+    per_column = _parse_show(show or [])
     today = today or _today()
 
     # Open cards in the order they were made; Done cards stay on the board, the most recently closed first.
@@ -114,7 +124,16 @@ def get_board(
         "blocked": lambda t: t.status == "blocked",
         "needs_review": lambda t: t.status == "review",
     }
-    shown = [t for t in in_view if all(matches[f](t) for f in filters)]
+    shown = _by_urgency([t for t in in_view if all(matches[f](t) for f in filters)], today)
+    column_totals = {s: sum(t.status == s for t in shown) for s in STATUSES}
+    if limit is not None:
+        sent = dict.fromkeys(STATUSES, 0)
+        kept = []
+        for t in shown:
+            if sent[t.status] < per_column.get(t.status, limit):
+                sent[t.status] += 1
+                kept.append(t)
+        shown = kept
     members = db.scalars(select(Person).where(Person.team_id == team.id, Person.active).order_by(Person.name))
 
     def build(tasks: list[Task]) -> list[schemas.TaskResponse]:
@@ -124,6 +143,7 @@ def get_board(
         team=schemas.BoardTeam(id=team.id, name=team.name, manager=_summary(team.manager)),
         read_only=not authorization.can_act(actor, team),
         tasks=build(shown),
+        column_totals=column_totals,
         people=[_summary(p) for p in members],
         filter_counts={f: sum(1 for t in in_view if matches[f](t)) for f in FILTERS},
         attention_count=len(attention_tasks),
@@ -136,6 +156,24 @@ def get_board(
         ),
         orphans=build([t for t in visible if rules.needs_reassignment(t, assignee(t))]),
     )
+
+
+def _by_urgency(tasks: list[Task], today: date) -> list[Task]:
+    """Open cards: overdue first, then soonest due (no date last), then most recently changed. Done keeps its
+    order (most recently closed first). Two stable sorts: the second decides, the first breaks its ties."""
+    open_ = sorted((t for t in tasks if t.status != "done"), key=lambda t: t.updated_at, reverse=True)
+    open_.sort(key=lambda t: (not rules.is_overdue(t, today), t.due_at or date.max))
+    return open_ + [t for t in tasks if t.status == "done"]
+
+
+def _parse_show(show: list[str]) -> dict[str, int]:
+    per_column = {}
+    for item in show:
+        status, _, count = item.partition(":")
+        if status not in STATUSES or not count.isdigit() or not 0 < int(count) <= MAX_COLUMN_CARDS:
+            raise AppError("invalid_show", f"Unknown column size: {item}.", 422)
+        per_column[status] = int(count)
+    return per_column
 
 
 # ---- shaping ----
@@ -158,7 +196,7 @@ def _load(db: Session, tasks: list[Task], extra_people: list[uuid.UUID | None] |
         .order_by(TaskActivity.created_at, TaskActivity.id)
     )
     last_status = {move.task_id: move for move in status_moves}  # later moves overwrite earlier ones
-    people_ids = {pid for t in tasks for pid in (t.creator_id, t.assignee_id) if pid}
+    people_ids = {pid for t in tasks for pid in (t.creator_id, t.assignee_id, t.support_id) if pid}
     people_ids |= {m.actor_id for m in last_status.values() if m.actor_id}
     people_ids |= {pid for pid in (extra_people or []) if pid}
     people = {p.id: p for p in db.scalars(select(Person).where(Person.id.in_(people_ids)))}
@@ -203,8 +241,12 @@ def _task_response(task: Task, team: Team, actor: Person, context: _Context, tod
         status=task.status,
         priority=task.priority,
         due_at=task.due_at,
+        start_at=task.start_at,
         creator=_summary(context.people.get(task.creator_id)),
         assignee=_summary(assignee),
+        support=_summary(context.people.get(task.support_id)),
+        project=task.project,
+        stage=task.stage,
         returned_count=task.returned_count,
         created_at=task.created_at,
         updated_at=task.updated_at,

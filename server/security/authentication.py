@@ -20,6 +20,7 @@ from core.config import settings
 from core.exceptions import AppError
 from database.config import get_db
 from models import Person
+from security import rate_limit
 from security.authorization import can_login
 
 DEV_HEADER = "X-Dev-User-Email"
@@ -30,6 +31,14 @@ def _not_onboarded() -> AppError:
 
 
 def get_current_person(request: Request, db: Session = Depends(get_db)) -> Person:
+    """The signed-in person, and one count against their request budget (`security/rate_limit.py`): every protected
+    endpoint asks for this, so none can skip the limit. Anonymous calls are refused before anything is counted."""
+    person = _identify(request, db)
+    rate_limit.check(("api", person.id), rate_limit.API_PER_MINUTE, 60)
+    return person
+
+
+def _identify(request: Request, db: Session) -> Person:
     scheme, _, credential = request.headers.get("Authorization", "").partition(" ")
     if scheme.lower() == "bearer" and credential:
         return _person_from_token(db, credential.strip())
@@ -46,7 +55,8 @@ def _person_from_token(db: Session, token: str) -> Person:
         person = db.get(Person, uuid.UUID(claims["sub"])) if claims else None
     except (KeyError, ValueError):
         person = None
-    if claims is None or person is None:
+    # A token issued before sessions had versions carries none, which counts as version 0.
+    if claims is None or person is None or claims.get("ver", 0) != person.session_version:
         raise AppError("not_authenticated", "Your session has ended. Sign in again.", 401)
     if not can_login(person):
         raise _not_onboarded()
