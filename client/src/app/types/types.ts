@@ -292,6 +292,20 @@ export interface TaskInput {
 }
 
 /** One problem in a refused bulk upload; `row` is the row number in the sheet, `column` may be empty. */
+/** One task a bulk upload would add, shown for the manager to confirm before anything is saved. */
+export interface ImportPreviewRow {
+  row: number;
+  title: string;
+  description: string;
+  priority: Priority;
+  assignee: string;
+  support: string | null;
+  project: string | null;
+  stage: string | null;
+  startAt: string | null;
+  dueAt: string | null;
+}
+
 export interface ImportRowError {
   row: number;
   column: string;

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BOARD_KEY, ME_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
 import type { Board, Status, TaskInput } from '../../../app/types/types';
-import { addComment, createTask, deleteTask, moveTask, updateTask, uploadTasks } from '../../../services/api';
+import { addComment, createTask, deleteTask, moveTask, previewTasks, updateTask, uploadTasks } from '../../../services/api';
 
 /** Every task change can move cards, header counts and an open detail panel. */
 function useRefresh() {
@@ -19,9 +19,14 @@ export function useCreateTask() {
   return useMutation({ mutationFn: (i: TaskInput) => createTask(i), onSuccess: refresh });
 }
 
+/** Checks the file and lists what it would add; saves nothing, so nothing to refresh. */
+export function usePreviewImport() {
+  return useMutation({ mutationFn: (file: File) => previewTasks(file) });
+}
+
 export function useImportTasks() {
   const refresh = useRefresh();
-  return useMutation({ mutationFn: (file: File) => uploadTasks(file), onSuccess: refresh });
+  return useMutation({ mutationFn: (v: { file: File; rows?: number[] }) => uploadTasks(v.file, v.rows), onSuccess: refresh });
 }
 
 export function useUpdateTask() {

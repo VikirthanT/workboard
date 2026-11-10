@@ -106,6 +106,19 @@ export interface WireBoardTeam {
   manager: WirePersonSummary | null;
 }
 
+export interface WireImportPreviewRow {
+  row: number;
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  assignee: string;
+  support: string | null;
+  project: string | null;
+  stage: string | null;
+  start_at: string | null;
+  due_at: string | null;
+}
+
 export interface WireBoard {
   team: WireBoardTeam;
   read_only: boolean;

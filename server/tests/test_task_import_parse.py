@@ -112,6 +112,7 @@ def test_blank_rows_are_skipped_and_the_defaults_apply(db, directory, npi):
     rows, errors = parse_upload(db, team_of(db, npi), sheet({}, {"Title": "A", "Assignee": "asha"}, {}))
 
     assert errors == [] and [(r.number, r.priority, r.description) for r in rows] == [(3, "medium", "")]
+    assert (rows[0].start_at, rows[0].due_at) == (date.today(), None)  # a blank start date is the upload day
 
 
 def test_every_problem_is_reported_with_its_row_and_column(db, directory, npi):
@@ -150,6 +151,44 @@ def test_an_upload_creates_every_task_with_its_timeline(directory, npi):
     assert (tasks[0]["support"]["name"], tasks[0]["project"], tasks[0]["stage"]) == ("Zoe", "P1", "Design")
     detail = directory.call(npi["asha"], "GET", f"/tasks/{tasks[0]['id']}").json()
     assert [a["kind"] for a in detail["timeline"]] == ["created"]
+
+
+def test_a_preview_lists_the_rows_and_saves_nothing(directory, npi):
+    data = sheet({"Title": "A", "Assignee": "ravi", "Support": "zoe", "Project": "P1", "Priority": "high"})
+
+    res = directory.call(npi["asha"], "POST", "/tasks/import?preview=true", files={"file": ("tasks.xlsx", data, "application/octet-stream")})
+
+    assert res.status_code == 200
+    [row] = res.json()["tasks"]
+    assert (row["row"], row["title"], row["assignee"], row["support"], row["project"], row["priority"]) == (2, "A", "Ravi", "Zoe", "P1", "high")
+    assert directory.call(npi["asha"], "GET", "/board").json()["tasks"] == []
+
+
+def test_only_the_ticked_rows_are_added(directory, npi):
+    data = sheet({"Title": "A", "Assignee": "ravi"}, {"Title": "B", "Assignee": "ravi"}, {"Title": "C", "Assignee": "ravi"})
+
+    res = directory.call(npi["asha"], "POST", "/tasks/import?rows=2,4", files={"file": ("tasks.xlsx", data, "application/octet-stream")})
+
+    assert (res.status_code, res.json()) == (201, {"created": 2})
+    assert sorted(t["title"] for t in directory.call(npi["asha"], "GET", "/board").json()["tasks"]) == ["A", "C"]
+
+
+@pytest.mark.parametrize("rows", ["9", "2,x", "2,,3", ","])
+def test_a_row_that_is_not_in_the_sheet_is_refused(directory, npi, rows):
+    data = sheet({"Title": "A", "Assignee": "ravi"}, {"Title": "B", "Assignee": "ravi"})
+
+    res = directory.call(npi["asha"], "POST", f"/tasks/import?rows={rows}", files={"file": ("tasks.xlsx", data, "application/octet-stream")})
+
+    assert (res.status_code, res.json()["detail"]["code"]) == (422, "invalid_rows")
+    assert directory.call(npi["asha"], "GET", "/board").json()["tasks"] == []
+
+
+def test_a_preview_reports_task_rule_errors_too(directory, npi):
+    data = sheet({"Title": "Late", "Assignee": "ravi", "Due date": date(2020, 1, 1)})
+
+    res = directory.call(npi["asha"], "POST", "/tasks/import?preview=true", files={"file": ("tasks.xlsx", data, "application/octet-stream")})
+
+    assert res.status_code == 422 and [e["row"] for e in res.json()["detail"]["errors"]] == [2]
 
 
 def test_one_bad_row_saves_nothing(directory, npi):

@@ -2,7 +2,7 @@
 
 Registered before `tasks.py` so `/tasks/import/...` is never read as `/tasks/{id}`.
 """
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile  # what request.form() returns (not fastapi's subclass)
@@ -36,11 +36,20 @@ def download_template(db: Session = Depends(get_db), actor: Person = Depends(get
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def upload_tasks(request: Request, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+async def upload_tasks(
+    request: Request,
+    preview: bool = False,
+    rows_: str = Query(default="", alias="rows", description="Comma-separated sheet row numbers to add; all when left out"),
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Create every task in the filled-in template on the caller's own team, all or nothing.
 
     Who: the manager of a team (403 `forbidden` for anyone else). Body: multipart form with the `.xlsx` as `file`.
-    Returns 201 `{"created": n}`. If anything is wrong nothing is saved: 422 `import_invalid` with
+    Returns 201 `{"created": n}`. With `?preview=true` every check runs but nothing is saved: 200 `{"tasks": [...]}`,
+    the rows that would be created, so the manager can look before confirming. `?rows=2,5` adds only those sheet rows
+    (the ones ticked in the preview); the rest are left out, and a number that is not a task row is 422 `invalid_rows`.
+    If anything is wrong nothing is saved: 422 `import_invalid` with
     `errors: [{row, column, message}]`, one per problem, so the whole sheet can be fixed in one pass.
     Other 422 codes: `invalid_file`, `empty_file`, `too_many_rows`, `file_too_large`.
 
@@ -59,9 +68,11 @@ async def upload_tasks(request: Request, db: Session = Depends(get_db), actor: P
     if len(data) > MAX_FILE_BYTES:
         raise AppError("file_too_large", "The file is larger than 2 MB.", 422)
     rows, errors = import_parse.parse_upload(db, team, data)
+    if rows_ and not errors:
+        rows = import_parse.only_rows(rows, rows_)
     if not errors:
         try:
-            commands.import_tasks(db, actor, rows)
+            commands.import_tasks(db, actor, rows, dry_run=preview)
         except commands.ImportRejected as rejected:
             errors = rejected.errors
     if errors:
@@ -73,4 +84,6 @@ async def upload_tasks(request: Request, db: Session = Depends(get_db), actor: P
                 "errors": [{"row": e.row, "column": e.column, "message": e.message} for e in errors],
             }},
         )
+    if preview:
+        return JSONResponse(status_code=200, content={"tasks": import_parse.preview(db, rows)})
     return {"created": len(rows)}

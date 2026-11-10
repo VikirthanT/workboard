@@ -45,9 +45,9 @@ def create_task(
     db.commit()
 
 
-def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date | None = None) -> None:
+def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date | None = None, dry_run: bool = False) -> None:
     """Create every row on the actor's own team in one transaction: if any row breaks a task rule, none is saved
-    and `ImportRejected` lists each row's problem."""
+    and `ImportRejected` lists each row's problem. `dry_run` runs every check and then saves nothing (the preview)."""
     team = own_team(db, actor)
     errors: list[RowError] = []
     for row in rows:
@@ -61,7 +61,10 @@ def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date 
     if errors:
         db.rollback()
         raise ImportRejected(errors)
-    db.commit()
+    if dry_run:
+        db.rollback()
+    else:
+        db.commit()
 
 
 class ImportRejected(Exception):

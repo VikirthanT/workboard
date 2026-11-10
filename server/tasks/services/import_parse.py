@@ -60,6 +60,30 @@ def parse_upload(db: Session, team: Team, data: bytes) -> tuple[list[ImportRow],
     return rows, errors
 
 
+def only_rows(rows: list[ImportRow], wanted: str) -> list[ImportRow]:
+    """The rows the manager ticked, from "2,5" (sheet row numbers). Every number must be one of the sheet's tasks."""
+    numbers = {str(r.number) for r in rows}
+    picked = {n.strip() for n in wanted.split(",")}
+    if not picked <= numbers:  # also catches "", "x" and a row that is not in the sheet
+        raise AppError("invalid_rows", "Pick the rows to add from the list.", 422)
+    return [r for r in rows if str(r.number) in picked]
+
+
+def preview(db: Session, rows: list[ImportRow]) -> list[dict]:
+    """The rows as the manager will see them before confirming: people by name, dates as ISO strings."""
+    ids = {r.assignee_id for r in rows} | {r.support_id for r in rows if r.support_id}
+    names = dict(db.execute(select(Person.id, Person.name).where(Person.id.in_(ids))).all())
+    return [
+        {
+            "row": r.number, "title": r.title, "description": r.description, "priority": r.priority,
+            "assignee": names[r.assignee_id], "support": names.get(r.support_id) if r.support_id else None,
+            "project": r.project, "stage": r.stage,
+            "start_at": r.start_at.isoformat() if r.start_at else None, "due_at": r.due_at.isoformat() if r.due_at else None,
+        }
+        for r in rows
+    ]
+
+
 def _read_sheet(data: bytes) -> list[tuple[int, dict[str, object]]]:
     """Non-blank rows as (sheet row number, {column name: cell}), whatever order the columns are in."""
     try:
@@ -120,7 +144,7 @@ def _parse_row(number: int, cells: dict[str, object], team: Team, people: dict[s
     for column, value in (("Project", project), ("Stage", stage)):
         if value and len(value) > MAX_LABEL_LENGTH:
             fail(column, f"At most {MAX_LABEL_LENGTH} characters.")
-    start_at = _date(cells["Start date"], "Start date", fail)
+    start_at = _date(cells["Start date"], "Start date", fail) or date.today()  # left blank: the day of the upload
     due_at = _date(cells["Due date"], "Due date", fail)
     if errors:
         return None
