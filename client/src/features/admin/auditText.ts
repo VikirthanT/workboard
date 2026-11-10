@@ -18,6 +18,8 @@ export function describeAudit(e: AuditEntry): string {
     case 'member.remove': return `Removed ${person} from ${team}`;
     case 'admin.grant': return `Made ${person} an admin`;
     case 'admin.revoke': return `Revoked admin from ${person}`;
+    case 'auth.login': return 'Signed in'; // the Who column already names the person
+    case 'auth.login_failed': return `Sign-in refused for ${detail(e, 'email', 'someone')}`;
     case 'task.delete': {
       const owner = typeof e.details?.assignee === 'string' ? ` (assigned to ${e.details.assignee})` : '';
       return `Deleted the task “${detail(e, 'title', 'a task')}”${owner} from ${team}`;
@@ -25,6 +27,18 @@ export function describeAudit(e: AuditEntry): string {
     case 'task.reassign': return `Reassigned “${detail(e, 'title', 'a task')}” from ${detail(e, 'from', 'nobody')} to ${detail(e, 'to', person)}`;
     default: return e.action; // a newer server action this screen does not know yet: show it as it is
   }
+}
+
+const REFUSED_BECAUSE: Record<string, string> = {
+  domain_not_allowed: 'Not a company account',
+  not_onboarded: 'Not set up as a manager or admin',
+};
+
+/** The Reason column: a refused sign-in stores the server's error code, shown as words; a sign-in has no reason to give. */
+export function auditReason(e: AuditEntry): string | null {
+  if (e.action === 'auth.login') return '–';
+  if (e.action === 'auth.login_failed') return REFUSED_BECAUSE[e.reason ?? ''] ?? e.reason;
+  return e.reason;
 }
 
 /** "1 to 50 of 262", or "No entries" when the log is empty. */

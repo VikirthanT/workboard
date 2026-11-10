@@ -19,6 +19,7 @@ const OAUTH_ERRORS: Record<string, string> = {
   not_onboarded: 'Only managers and admins can sign in. If you should have access, ask an admin.',
   auth_not_configured: 'The server has no sign-in configured. Start it with make dev, which turns the dev sign-in on.',
   invalid_state: 'That sign-in did not start here or took too long. Please try again.',
+  too_many_attempts: 'Too many sign-in attempts. Wait a few minutes and try again.',
 };
 
 const GOOGLE_REDIRECT_TIMEOUT_MS = 10_000;

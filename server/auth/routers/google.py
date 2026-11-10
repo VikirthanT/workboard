@@ -19,11 +19,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from auth import schemas, states
-from auth.services import google, login_codes, tokens
+from auth.services import google, login_audit, login_codes, tokens
 from core.config import settings
 from core.exceptions import AppError
 from database.config import get_db
 from models import Person
+from security import rate_limit
 from security.authorization import can_login
 
 router = APIRouter(prefix="/auth/google", tags=["auth"])
@@ -83,10 +84,20 @@ def callback(
         return _back_to_login(states.ERR_STATE)
     try:
         id_token = google.exchange_code(code)
-        email = google.read_identity(id_token, saved["nonce"])
-        person = google.person_for_email(db, email)
-    except AppError as refused:
+        email = google.verified_email(id_token, saved["nonce"])
+    except AppError as refused:  # no verified identity yet, so there is no one to name in the audit log
         log.warning("Google sign-in refused: %s (%s)", refused.code, refused.message)
+        return _back_to_login(refused.code)
+    try:  # a budget of sign-ins per email, whether they succeed or not
+        rate_limit.check(("login", email), rate_limit.LOGIN_ATTEMPTS, rate_limit.LOGIN_WINDOW_SECONDS)
+    except AppError:
+        return _back_to_login(states.ERR_RATE_LIMITED)
+    try:
+        google.require_company_domain(email)
+        person = google.person_for_email(db, email)
+    except AppError as refused:  # Google vouches for who this is, so the refusal is recorded
+        log.warning("Google sign-in refused: %s (%s)", refused.code, refused.message)
+        login_audit.record_refused_login(db, email, refused.code)
         return _back_to_login(refused.code)
     one_time_code = secrets.token_urlsafe(32)
     login_codes.issue(db, person.id, one_time_code)
@@ -111,6 +122,8 @@ def exchange(code: str, response: Response, db: Session = Depends(get_db)):
         log.warning("One-time login code refused: unknown, already used or expired")
         raise AppError(states.ERR_EXCHANGE, "That sign-in link has expired or was already used. Sign in again.", 400)
     if not can_login(person):
+        login_audit.record_refused_login(db, person.email, states.ERR_NOT_ONBOARDED)
         raise AppError(states.ERR_NOT_ONBOARDED, "This account is not set up as a manager or admin.", 403)
-    token = tokens.sign("session", {"sub": str(person.id)}, settings.token_ttl_seconds)
+    login_audit.record_login(db, person)
+    token = tokens.sign("session", {"sub": str(person.id), "ver": person.session_version}, settings.token_ttl_seconds)
     return schemas.SessionResponse(token=token, email=person.email, name=person.name)

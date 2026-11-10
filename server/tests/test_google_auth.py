@@ -12,7 +12,8 @@ from auth import states
 from auth.services import google, login_codes, tokens
 from core.config import settings
 from core.exceptions import AppError
-from models import LoginCode
+from models import AccessAuditLog, LoginCode
+from security import rate_limit
 from tests.conftest import make_team
 
 CLIENT_ID = "test-client.apps.googleusercontent.com"
@@ -27,6 +28,9 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "google_redirect_uri", REDIRECT)
     monkeypatch.setattr(settings, "secret_key", "k" * 40)
     monkeypatch.setattr(settings, "token_ttl_seconds", 3600)
+    # These tests send unsigned fake ID tokens through the whole flow, so the signature check is off here.
+    # test_google_signature.py tests that check on its own, with real keys.
+    monkeypatch.setattr(google, "verify_signature", lambda _token: None)
 
 
 def id_token(real_nonce: str, **over) -> str:
@@ -145,6 +149,91 @@ def test_a_manager_signs_in_and_the_session_token_works_everywhere(directory, mo
     me = directory.client.get("/api/me", headers={"Authorization": f"Bearer {body['token']}"})
     assert me.status_code == 200 and me.json()["email"] == "asha@atimotors.com"
     assert directory.client.get("/api/board", headers={"Authorization": f"Bearer {body['token']}"}).status_code == 200
+
+
+def test_a_sign_in_is_in_the_audit_log_with_only_who_signed_in(directory, monkeypatch, asha, admin, db):
+    exchange(directory, one_time_code(sign_in(directory, monkeypatch)))
+
+    entries = [e for e in db.query(AccessAuditLog).all() if e.action == "auth.login"]
+    assert [(e.actor_id, e.team_id, e.person_id, e.reason, e.details) for e in entries] == [(asha.id, None, None, None, None)]
+    page = directory.call(admin, "GET", "/audit-log").json()["items"]
+    assert [(i["action"], i["actor_name"]) for i in page if i["action"] == "auth.login"] == [("auth.login", "Asha")]
+
+
+def test_too_many_sign_ins_for_one_email_are_sent_back_to_the_login_page(directory, monkeypatch, asha):
+    monkeypatch.setattr(rate_limit, "LOGIN_ATTEMPTS", 2)
+
+    results = [landed_on(sign_in(directory, monkeypatch)) for _ in range(3)]
+
+    assert results[0].startswith("/login?code=") and results[1].startswith("/login?code=")
+    assert results[2] == "/login?error=too_many_attempts"
+
+
+def test_refused_attempts_count_too_and_another_email_is_unaffected(directory, monkeypatch, asha):
+    monkeypatch.setattr(rate_limit, "LOGIN_ATTEMPTS", 2)
+    for _ in range(2):
+        sign_in(directory, monkeypatch, email="someone@gmail.com")  # refused: not a company account
+
+    assert landed_on(sign_in(directory, monkeypatch, email="someone@gmail.com")) == "/login?error=too_many_attempts"
+    assert landed_on(sign_in(directory, monkeypatch)).startswith("/login?code=")  # asha has a budget of her own
+
+
+def test_a_reused_code_is_not_a_second_login(directory, monkeypatch, asha, db):
+    code = one_time_code(sign_in(directory, monkeypatch))
+    exchange(directory, code)
+    assert exchange(directory, code).status_code == 400  # the code works once
+
+    assert len(logged(db, "auth.login")) == 1
+
+
+def logged(db, action):
+    db.expire_all()
+    return [e for e in db.query(AccessAuditLog).all() if e.action == action]
+
+
+@pytest.mark.parametrize("email,code,known", [
+    ("someone@gmail.com", "domain_not_allowed", False),
+    ("ghost@atimotors.com", "not_onboarded", False),  # a company address the directory has never heard of
+    ("loner@atimotors.com", "not_onboarded", True),  # in the directory, but only a member
+])
+def test_a_refused_sign_in_by_a_verified_person_is_logged_with_the_reason(directory, monkeypatch, asha, db, email, code, known):
+    person = directory.person("Loner") if known else None
+
+    assert landed_on(sign_in(directory, monkeypatch, email=email)) == f"/login?error={code}"
+
+    [entry] = logged(db, "auth.login_failed")
+    assert (entry.reason, entry.details, entry.actor_id) == (code, {"email": email}, person.id if person else None)
+    assert logged(db, "auth.login") == []
+
+
+def test_the_same_refusal_is_logged_once_per_quiet_window(directory, monkeypatch, asha, db):
+    for _ in range(3):
+        sign_in(directory, monkeypatch, email="someone@gmail.com")
+    sign_in(directory, monkeypatch, email="other@gmail.com")  # a different person is a different entry
+
+    assert sorted(e.details["email"] for e in logged(db, "auth.login_failed")) == ["other@gmail.com", "someone@gmail.com"]
+
+
+@pytest.mark.parametrize("kwargs", [
+    dict(google_error="access_denied"), dict(cookie=False), dict(state="not-the-state"),
+    dict(aud="someone-elses-client"), dict(email_verified=False), dict(token="not-a-token"),
+])
+def test_a_failure_with_no_verified_identity_is_not_logged(directory, monkeypatch, asha, db, kwargs):
+    sign_in(directory, monkeypatch, **kwargs)  # no one to name, and anyone could send these without an account
+
+    assert logged(db, "auth.login_failed") == []
+
+
+def test_a_person_who_lost_their_role_before_the_exchange_is_logged_as_refused(directory, monkeypatch, asha, db):
+    code = one_time_code(sign_in(directory, monkeypatch))
+    asha_row = db.get(type(asha), asha.id)
+    asha_row.active = False
+    db.commit()
+
+    assert exchange(directory, code).status_code == 403
+
+    [entry] = logged(db, "auth.login_failed")
+    assert (entry.actor_id, entry.reason) == (asha.id, "not_onboarded")
 
 
 def test_an_admin_can_sign_in_too(directory, admin, monkeypatch):
