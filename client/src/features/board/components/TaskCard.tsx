@@ -78,6 +78,11 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard({ ta
         </span>
         <span className={cn('shrink-0 tabular-nums', task.overdue && 'font-semibold text-danger-ink')}>{formatDue(task.dueAt, done)}</span>
       </div>
+      {task.support && (
+        <p className="truncate text-sm text-ink-subtle">
+          Support: <span className="font-medium text-ink-muted">{task.support.displayName}</span>
+        </p>
+      )}
     </div>
   );
 });

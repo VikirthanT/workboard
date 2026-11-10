@@ -1,7 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { getBoardKey, getTaskKey } from '../../../app/constants/queryKeys';
+import { getBoardKey, getPeopleSearchKey, getTaskKey } from '../../../app/constants/queryKeys';
 import type { BoardQuery } from '../../../app/types/types';
-import { getBoard, getTask } from '../../../services/api';
+import { getBoard, getTask, searchPeople } from '../../../services/api';
+
+/** Anyone active in the directory matching `q`, searched on the server; loaded only while the Support picker is open. */
+export function usePeopleSearch(enabled: boolean, q: string) {
+  return useQuery({ queryKey: getPeopleSearchKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData });
+}
 
 export function useBoard(query: BoardQuery) {
   return useQuery({ queryKey: getBoardKey(query), queryFn: () => getBoard(query), placeholderData: keepPreviousData });

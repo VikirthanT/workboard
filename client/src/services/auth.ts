@@ -12,6 +12,19 @@ export async function exchangeGoogleCode(code: string): Promise<Session> {
   return data;
 }
 
+/**
+ * Tell the server to end every session this person has, so the token stops working there too (not only here).
+ * The token is passed in because the caller clears the local session at once: the request must not depend on it.
+ * Best effort: if the server cannot be reached the person is still signed out in this browser.
+ */
+export async function endServerSession(token: string): Promise<void> {
+  try {
+    await apiClient.post('/auth/logout', null, { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 });
+  } catch {
+    /* already signed out here; a token that outlives this is capped by its expiry */
+  }
+}
+
 /** Dev builds only: the accounts the login page offers instead of Google (the server serves them with DEV_AUTH on). */
 export async function getDevAccounts(): Promise<DevAccount[]> {
   if (!import.meta.env.DEV) throw new Error('Not available'); // lets a production build drop the rest

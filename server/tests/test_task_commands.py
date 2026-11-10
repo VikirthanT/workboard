@@ -10,6 +10,9 @@ from core.exceptions import AppError
 from models import AccessAuditLog, Task, TaskActivity
 from tasks.services import commands
 
+DUE = date.today() + timedelta(days=30)  # a due date can never be in the past, so it moves with the clock
+LATER = DUE + timedelta(days=3)
+
 
 @contextmanager
 def refused(code: str):
@@ -43,10 +46,10 @@ def kinds(db, task_id) -> list[str]:
 # ---- create ----
 
 def test_create_puts_a_to_do_on_the_managers_team_with_a_created_entry(db, npi):
-    task_id = make(db, npi, title="  Wire harness  ", description=" check ", priority="high", due_at=date(2026, 10, 30))
+    task_id = make(db, npi, title="  Wire harness  ", description=" check ", priority="high", due_at=DUE)
 
     t = task(db, task_id)
-    assert (t.title, t.description, t.status, t.priority, t.due_at) == ("Wire harness", "check", "todo", "high", date(2026, 10, 30))
+    assert (t.title, t.description, t.status, t.priority, t.due_at) == ("Wire harness", "check", "todo", "high", DUE)
     assert (str(t.team_id), t.creator_id, t.assignee_id) == (npi["team"]["id"], npi["asha"].id, npi["ravi"].id)
     [entry] = timeline(db, task_id)
     assert (entry.kind, entry.new_value, entry.actor_id, entry.source) == ("created", "todo", npi["asha"].id, "workboard")
@@ -78,18 +81,18 @@ def test_create_refuses_a_blank_title_and_anyone_but_the_manager(db, npi, admin)
 # ---- update ----
 
 def test_update_writes_one_entry_per_field_that_really_changed(db, npi):
-    task_id = make(db, npi, due_at=date(2026, 10, 30))
+    task_id = make(db, npi, due_at=DUE)
 
-    commands.update_task(db, npi["asha"], task_id, {"title": "Wire harness v2", "priority": "medium", "due_at": date(2026, 11, 2)})
+    commands.update_task(db, npi["asha"], task_id, {"title": "Wire harness v2", "priority": "medium", "due_at": LATER})
 
     t = task(db, task_id)
-    assert (t.title, t.priority, t.due_at) == ("Wire harness v2", "medium", date(2026, 11, 2))
+    assert (t.title, t.priority, t.due_at) == ("Wire harness v2", "medium", LATER)
     edits = {a.field: (a.old_value, a.new_value) for a in timeline(db, task_id) if a.kind == "edit"}
-    assert edits == {"title": ("Wire harness", "Wire harness v2"), "due date": ("2026-10-30", "2026-11-02")}  # priority did not change
+    assert edits == {"title": ("Wire harness", "Wire harness v2"), "due date": (DUE.isoformat(), LATER.isoformat())}  # priority did not change
 
 
 def test_update_with_nothing_new_adds_no_entry_and_null_clears_the_date(db, npi):
-    task_id = make(db, npi, due_at=date(2026, 10, 30))
+    task_id = make(db, npi, due_at=DUE)
 
     commands.update_task(db, npi["asha"], task_id, {"title": "Wire harness"})
     assert kinds(db, task_id) == ["created"]

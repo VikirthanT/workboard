@@ -149,6 +149,9 @@ export interface Task {
   dueAt: string | null;
   creator: PersonSummary;
   assignee: PersonSummary;
+  /** Optional helper, anyone active in the directory (not only the team). */
+  support: PersonSummary | null;
+  project: string | null;
   returnedCount: number;
   createdAt: string;
   updatedAt: string;
@@ -274,6 +277,16 @@ export interface TaskInput {
   priority: Priority;
   dueAt: string | null;
   assigneeId: string;
+  /** `null` clears it on an edit; left out, it stays as it is. */
+  supportId?: string | null;
+  project?: string | null;
+}
+
+/** One problem in a refused bulk upload; `row` is the row number in the sheet, `column` may be empty. */
+export interface ImportRowError {
+  row: number;
+  column: string;
+  message: string;
 }
 
 // ------------------------------------------------------------ teams / admin

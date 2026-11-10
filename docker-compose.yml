@@ -13,6 +13,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-workboard}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Only what the Postgres image needs to prepare and own its data directory (tested on a fresh and an existing volume).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workboard} -d ${POSTGRES_DB:-workboard}"]
       interval: 5s
@@ -59,6 +63,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    # nginx starts as root to own its cache folders and drop to the nginx user, and binds port 80 (NET_BIND_SERVICE);
+    # nothing else is needed (tested).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
   # The one public door: /api -> server, everything else -> frontend.
@@ -69,6 +78,9 @@ services:
       - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       server:
         condition: service_healthy

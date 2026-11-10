@@ -43,6 +43,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from database.config import SessionLocal  # noqa: E402
 from main import app  # noqa: E402
 from models import Person  # noqa: E402
+from security import rate_limit  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -61,6 +62,11 @@ def _database():
     # does not touch it (see the tests README for the one-line cleanup).
     with admin.connect() as conn:
         conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)"))
+
+
+@pytest.fixture(autouse=True)
+def _clean_rate_limits():
+    rate_limit.reset()  # a test must not inherit another test's request counts
 
 
 @pytest.fixture(autouse=True)

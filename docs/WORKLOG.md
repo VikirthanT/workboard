@@ -6,15 +6,15 @@ Day-by-day record for people who were not there. Newest entry first. Commit ids 
 
 | Area | State |
 |---|---|
-| Managers-only model (users vs people, teams, one-to-one cardinality) | Done; the rules live on the server only (`security/authorization.py`), 605 server tests |
+| Managers-only model (users vs people, teams, one-to-one cardinality) | Done; the rules live on the server only (`security/authorization.py`), 725 server tests (10 Nov) |
 | Admin Teams portal (`/admin`) | Rebuilt on the real API (17 Oct): grouped collapsible teams, search, role filter, Manager / Member dropdown, Admin tick, dustbin, create / delete team, paged audit log. Looked at in a browser, light and dark (Teams tab light, Audit tab dark); dialogs not yet clicked through; no component tests yet |
 | Manager My team (`/team`) and "No team yet" page | My team rebuilt on the real API (search, add, dustbin); not yet looked at in a browser after the rebuild |
 | Board (one per team) | On the real API; home for every role; drag to move (Resume button on a blocked task); admins may comment on any board; looked at in a browser, light and dark. Some of 17 Oct's changes (admin comments, delete / reassign audit) not yet looked at in a browser |
 | Standup suggestions (inbox, lifecycle rules, standup-DB reader and Groq extraction design) and the weekly handover note | Moved out of this branch to the snapshot folder `workboard-suggestions-snapshot`, to come back on a later branch |
-| Backend (FastAPI + Postgres) | Identity (people, teams, admin, audit), tasks (tasks, timeline, comments, board query, team reports) and auth (Google sign-in, signed tokens) built; 605 server tests pass with 100% line and branch coverage of the app code (Google faked). The frontend talks to it for everything. Google sign-in not yet tried against real Google. |
+| Backend (FastAPI + Postgres) | Identity (people, teams, admin, audit), tasks (tasks, timeline, comments, board query, team reports) and auth (Google sign-in, signed tokens) built, plus bulk import from Excel, sign-out of every session, sign-in audit and rate limits (10 Nov); 725 server tests pass (10 Nov; coverage last measured at 100% on 19 Oct, not re-measured) (Google faked). The frontend talks to it for everything. Google sign-in not yet tried against real Google. |
 | Local setup and production stack | `.env` (copy `.env.example`) drives `make dev` and `make prod-up`; the database password and URL are in no source file; `docker-compose.dev.yml`, `docker-compose.yml` (prod) and `Dockerfile.api` added |
 | Slack bot and the weekly Slack directory pull (both Phase 2) | Not started; data model carries `accepted_at` and comment `source`; until the pull exists the directory loads from a file (`make db-seed`) |
-| Frontend tests | 180 vitest tests (pure code, error boundary, `services/requests.test.ts` pinning every service route, and component tests for every item in `refdocs/checklist.md` 4.2: team components, dialogs, admin screens, task form and sheet, `DatePicker`, `Select`, login page); `make test` also guards the production bundle. Rest of the component tests in progress (`refdocs/checklist.md` 4.2) |
+| Frontend tests | 193 vitest tests on 10 Nov (pure code, error boundary, `services/requests.test.ts` pinning every service route, and component tests for every item in `refdocs/checklist.md` 4.2: team components, dialogs, admin screens, task form and sheet, `DatePicker`, `Select`, login page); `make test` also guards the production bundle. Rest of the component tests in progress (`refdocs/checklist.md` 4.2) |
 | Playwright specs | Set up (19 Oct): `make e2e`, two smoke specs (admin creates a team and reads the audit log; manager adds a task and drags it), on a throwaway database; not part of `make test` |
 | What is left | `refdocs/checklist.md` is the working list for the coming days |
 
@@ -57,6 +57,23 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Person:** a people-directory entry (name, email, Slack ID). Never signs in; an assignee.
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
+
+## 10 Nov 2026: bulk import, Support and Project, security hardening
+
+**Summary.** On the `security` branch: tasks gained an optional Support person and Project, and a manager can add many tasks at once from an Excel template. Sign-in and sessions were hardened (sign out ends every session, Google's signature is checked, sign-ins are audited, rate limits), and nginx and the containers were locked down. The branch was pushed to `origin/security`; nothing was merged.
+
+**Commits (oldest first).**
+- `0e8a528` Upgrade the frontend build and test tools to vite 7 and vitest 4 (`client/package.json`, lock file, `client/vitest.config.ts`).
+- `5bac3cf` Keep task test due dates in the future: the fixed October and November 2026 dates had passed, and a due date cannot be in the past.
+- `8b8127e` Add Support and Project to tasks and a bulk import from Excel. Migration `0004` (`support_id`, `project`, `stage`, `start_at` on `tasks`); `GET /api/tasks/import/template` and `POST /api/tasks/import` in `server/tasks/routers/imports.py` (all or nothing, 2 MB and 500 rows at most, 6 uploads a minute per person); `server/security/rate_limit.py`; client `ImportDialog.tsx`, the Import button on the board, Project and a searchable Support picker in the task form.
+- `67136fb` Harden sign-in, sessions and the production stack. Migration `0005` (`people.session_version`); `POST /api/auth/logout` (`server/auth/routers/session.py`) ends every session of that person; the Google ID token's signature is checked (pyjwt, cryptography); `auth.login` and `auth.login_failed` in the audit log; 300 requests a minute per signed-in person and 10 Google sign-ins per email per 10 minutes (`too_many_attempts`); nginx security headers, CSP, body caps, per-address limits, `/api/dev/` and the docs pages answer 404, no query strings in the access log; `cap_drop: [ALL]` on every production service. New tests: `test_security_surface.py` (every route needs a session), `test_google_signature.py`, `test_logout.py`, `test_rate_limit.py`.
+- `d130c28` Add a three-minute manager walkthrough script (`docs/MANAGER_WALKTHROUGH.md`).
+
+**What you will see.** An Import button next to Add task on a manager's board; Project and Support in the task form, Support on the card and in the task panel; "Signed in" and refused sign-ins in the admin's audit log.
+
+**Checked.** On the whole tree before committing: `make typecheck` clean; `make test` 193 frontend, 725 server, 5 bundle checks, all passed; AtiUI token grep empty. The commits were not tested one by one.
+
+**Not done or not checked.** Google sign-in still not tried against real Google. The nginx per-address limits not checked behind the real front layer (`docs/DEPLOYMENT.md` says what to look at). The import and Support picker not looked at in a browser here (light and dark). `client/vitest.config.ts` caps workers with `poolOptions.forks.maxForks`, which vitest 4 no longer lists (it has `maxWorkers`), so the cap may be ignored. The walkthrough script does not cover Import or Support.
 
 ## 22 Oct 2026: first push to GitHub, nginx stack, favicon
 

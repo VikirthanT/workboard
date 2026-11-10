@@ -27,6 +27,8 @@ class Person(Base):
         ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_people_team_id")
     )
     active: Mapped[bool] = mapped_column(default=True, server_default=true())
+    # Session tokens carry the version they were issued under; signing out adds one, which ends every session.
+    session_version: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

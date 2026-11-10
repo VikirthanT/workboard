@@ -158,7 +158,7 @@ def _load(db: Session, tasks: list[Task], extra_people: list[uuid.UUID | None] |
         .order_by(TaskActivity.created_at, TaskActivity.id)
     )
     last_status = {move.task_id: move for move in status_moves}  # later moves overwrite earlier ones
-    people_ids = {pid for t in tasks for pid in (t.creator_id, t.assignee_id) if pid}
+    people_ids = {pid for t in tasks for pid in (t.creator_id, t.assignee_id, t.support_id) if pid}
     people_ids |= {m.actor_id for m in last_status.values() if m.actor_id}
     people_ids |= {pid for pid in (extra_people or []) if pid}
     people = {p.id: p for p in db.scalars(select(Person).where(Person.id.in_(people_ids)))}
@@ -203,8 +203,12 @@ def _task_response(task: Task, team: Team, actor: Person, context: _Context, tod
         status=task.status,
         priority=task.priority,
         due_at=task.due_at,
+        start_at=task.start_at,
         creator=_summary(context.people.get(task.creator_id)),
         assignee=_summary(assignee),
+        support=_summary(context.people.get(task.support_id)),
+        project=task.project,
+        stage=task.stage,
         returned_count=task.returned_count,
         created_at=task.created_at,
         updated_at=task.updated_at,

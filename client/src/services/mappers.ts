@@ -57,6 +57,8 @@ export const mapTask = (t: WireTask): Task => ({
   dueAt: t.due_at,
   creator: mapOwner(t.creator),
   assignee: mapOwner(t.assignee),
+  support: t.support ? mapSummary(t.support) : null,
+  project: t.project,
   returnedCount: t.returned_count,
   createdAt: t.created_at,
   updatedAt: t.updated_at,

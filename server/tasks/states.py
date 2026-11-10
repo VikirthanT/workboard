@@ -1,6 +1,7 @@
 """Limits and names for the tasks feature. Mirrors the checks in client/src/mocks/handlers.ts."""
 MAX_TITLE_LENGTH = 140
 MAX_DESCRIPTION_LENGTH = 5000
+MAX_LABEL_LENGTH = 100  # project and stage
 MAX_NOTE_LENGTH = 500  # the reason or remarks on a status move
 MAX_COMMENT_LENGTH = 1000
 
@@ -11,3 +12,7 @@ FIELD_PRIORITY = "priority"
 FIELD_DUE = "due date"
 FIELD_ASSIGNEE = "assignee"
 FIELD_STATUS = "status"
+FIELD_SUPPORT = "support"
+FIELD_PROJECT = "project"
+FIELD_STAGE = "stage"
+FIELD_START = "start date"

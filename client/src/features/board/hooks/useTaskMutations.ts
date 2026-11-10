@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BOARD_KEY, ME_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
 import type { Status, TaskInput } from '../../../app/types/types';
-import { addComment, createTask, deleteTask, moveTask, updateTask } from '../../../services/api';
+import { addComment, createTask, deleteTask, moveTask, updateTask, uploadTasks } from '../../../services/api';
 
 /** Every task change can move cards, header counts and an open detail panel. */
 function useRefresh() {
@@ -17,6 +17,11 @@ function useRefresh() {
 export function useCreateTask() {
   const refresh = useRefresh();
   return useMutation({ mutationFn: (i: TaskInput) => createTask(i), onSuccess: refresh });
+}
+
+export function useImportTasks() {
+  const refresh = useRefresh();
+  return useMutation({ mutationFn: (file: File) => uploadTasks(file), onSuccess: refresh });
 }
 
 export function useUpdateTask() {

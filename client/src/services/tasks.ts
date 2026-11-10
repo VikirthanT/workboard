@@ -35,6 +35,8 @@ const toWireInput = (i: Partial<TaskInput>) => ({
   priority: i.priority,
   due_at: i.dueAt,
   assignee_id: i.assigneeId,
+  support_id: i.supportId,
+  project: i.project,
 });
 
 export async function createTask(input: TaskInput): Promise<Task> {

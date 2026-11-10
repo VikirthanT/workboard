@@ -12,6 +12,7 @@ export const TEAMS_KEY = ['teams'] as const;
 export const getTeamMembersKey = (id: string) => [...TEAMS_KEY, id, 'members'] as const;
 export const UNASSIGNED_KEY = ['people', 'unassigned'] as const;
 export const getUnassignedKey = (q: string) => [...UNASSIGNED_KEY, q] as const;
+export const getPeopleSearchKey = (q: string) => ['people', 'search', q] as const;
 export const ADMINS_KEY = ['admins'] as const;
 export const getAdminCandidatesKey = (q: string) => [...ADMINS_KEY, 'candidates', q] as const;
 export const AUDIT_KEY = ['audit'] as const;
