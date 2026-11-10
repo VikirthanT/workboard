@@ -110,6 +110,7 @@ export interface WireBoard {
   team: WireBoardTeam;
   read_only: boolean;
   tasks: WireTask[];
+  column_totals: Record<'todo' | 'in_progress' | 'blocked' | 'review' | 'done', number>;
   people: WirePersonSummary[];
   filter_counts: Record<string, number>;
   attention_count: number;

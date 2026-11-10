@@ -195,6 +195,7 @@ class Board(BaseModel):
     team: BoardTeam
     read_only: bool  # an admin looking at a team they do not run
     tasks: list[TaskResponse]
+    column_totals: dict[str, int]  # cards per column after the filters, before `limit`: "Load more" knows what is left
     people: list[PersonSummary]  # the team's active people, for the person dropdown
     filter_counts: dict[str, int]
     attention_count: int

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { Badge } from '../../../app/components/ui/badge';
+import { Button } from '../../../app/components/ui/button';
 import { cn } from '../../../app/lib/utils';
-import { STATUSES, STATUS_LABEL, type Status, type Task, type Transition } from '../../../app/types/types';
+import { BOARD_PAGE, STATUSES, STATUS_LABEL, type ColumnSizes, type Status, type Task, type Transition } from '../../../app/types/types';
 import { TaskCard } from './TaskCard';
 
 interface Props {
@@ -13,20 +14,11 @@ interface Props {
   onBlockedDrop: (task: Task, to: Status) => void;
   /** A read-only view (an admin on a team they do not run): cards open but cannot be dragged. */
   readOnly?: boolean;
-}
-
-/** Overdue first, then soonest due, then newest. */
-function byUrgency(a: Task, b: Task) {
-  return (
-    Number(b.overdue) - Number(a.overdue) ||
-    (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') ||
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
-}
-
-/** Done cards stay on the board: the most recently closed on top. */
-function byClosedNewest(a: Task, b: Task) {
-  return (b.closedAt ?? '').localeCompare(a.closedAt ?? '');
+  /** Each column's full count (the server sends only the first cards of each). */
+  columnTotals: Record<Status, number>;
+  /** Columns grown by "Load more", and how to grow or reset one. */
+  sizes: ColumnSizes;
+  onSizesChange: (sizes: ColumnSizes) => void;
 }
 
 function DraggableCard({ task, onOpen, readOnly }: { task: Task; onOpen: (id: string) => void; readOnly: boolean }) {
@@ -53,8 +45,21 @@ function DraggableCard({ task, onOpen, readOnly }: { task: Task; onOpen: (id: st
   );
 }
 
-function Column({ status, tasks, onOpen, droppable, dragging, readOnly }: { status: Status; tasks: Task[]; onOpen: (id: string) => void; droppable: boolean; dragging: boolean; readOnly: boolean }) {
+interface ColumnProps {
+  status: Status;
+  tasks: Task[];
+  total: number;
+  onOpen: (id: string) => void;
+  onLoadMore: () => void;
+  onShowLess?: () => void;
+  droppable: boolean;
+  dragging: boolean;
+  readOnly: boolean;
+}
+
+function Column({ status, tasks, total, onOpen, onLoadMore, onShowLess, droppable, dragging, readOnly }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  const left = total - tasks.length;
   return (
     <section
       aria-labelledby={`col-${status}`}
@@ -67,26 +72,37 @@ function Column({ status, tasks, onOpen, droppable, dragging, readOnly }: { stat
     >
       <header className="flex items-center justify-between px-3 py-2.5">
         <h2 id={`col-${status}`} className="text-base font-semibold text-ink">{STATUS_LABEL[status]}</h2>
-        <Badge>{tasks.length}</Badge>
+        <Badge>{total}</Badge>
       </header>
       <div ref={setNodeRef} className="flex min-h-[120px] flex-1 flex-col gap-2 px-2 pb-2">
         {tasks.map((t) => <DraggableCard key={t.id} task={t} onOpen={onOpen} readOnly={readOnly} />)}
         {tasks.length === 0 && <p className="px-1 py-6 text-center text-sm text-ink-subtle">Nothing here</p>}
+        {left > 0 && (
+          <Button variant="ghost" size="sm" onClick={onLoadMore}>
+            Load {Math.min(left, BOARD_PAGE)} more <span className="text-ink-subtle">({left} left)</span>
+          </Button>
+        )}
+        {onShowLess && <Button variant="ghost" size="sm" onClick={onShowLess}>Show less</Button>}
       </div>
     </section>
   );
 }
 
-export function KanbanBoard({ tasks, onOpen, onTransition, onBlockedDrop, readOnly = false }: Props) {
+export function KanbanBoard({ tasks, onOpen, onTransition, onBlockedDrop, readOnly = false, columnTotals, sizes, onSizesChange }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // The server sends each column already sorted (open: most urgent first; Done: newest closed first).
   const byStatus = useMemo(() => {
     const m = new Map<Status, Task[]>(STATUSES.map((s) => [s, []]));
     tasks.forEach((t) => m.get(t.status)!.push(t));
-    m.forEach((list, status) => list.sort(status === 'done' ? byClosedNewest : byUrgency));
     return m;
   }, [tasks]);
+
+  function showLess(status: Status) {
+    const { [status]: _dropped, ...rest } = sizes;
+    onSizesChange(rest);
+  }
 
   const active = tasks.find((t) => t.id === activeId) ?? null;
   const validTargets = new Set(active?.actions.transitions.map((t) => t.to));
@@ -105,7 +121,18 @@ export function KanbanBoard({ tasks, onOpen, onTransition, onBlockedDrop, readOn
     <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))} onDragEnd={end} onDragCancel={() => setActiveId(null)}>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {STATUSES.map((s) => (
-          <Column key={s} status={s} tasks={byStatus.get(s)!} onOpen={onOpen} droppable={validTargets.has(s)} dragging={!!active} readOnly={readOnly} />
+          <Column
+            key={s}
+            status={s}
+            tasks={byStatus.get(s)!}
+            total={columnTotals[s]}
+            onOpen={onOpen}
+            onLoadMore={() => onSizesChange({ ...sizes, [s]: (sizes[s] ?? BOARD_PAGE) + BOARD_PAGE })}
+            onShowLess={sizes[s] ? () => showLess(s) : undefined}
+            droppable={validTargets.has(s)}
+            dragging={!!active}
+            readOnly={readOnly}
+          />
         ))}
       </div>
       <DragOverlay>{active ? <TaskCard task={active} className="rotate-1 shadow-overlay" /> : null}</DragOverlay>

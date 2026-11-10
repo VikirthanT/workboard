@@ -1,8 +1,8 @@
-import type { BoardQuery } from '../types/types';
+import type { BoardQuery, ColumnSizes } from '../types/types';
 
 export const ME_KEY = ['me'] as const;
 export const BOARD_KEY = ['board'] as const;
-export const getBoardKey = (q: BoardQuery) => [...BOARD_KEY, q] as const;
+export const getBoardKey = (q: BoardQuery, sizes: ColumnSizes) => [...BOARD_KEY, q, sizes] as const;
 export const REPORT_KEY = ['report'] as const;
 export const getReportKey = (q: BoardQuery, from: string, to: string) => [...REPORT_KEY, q, from, to] as const;
 export const getAllTeamsReportKey = (from: string, to: string) => [...REPORT_KEY, 'all-teams', from, to] as const;

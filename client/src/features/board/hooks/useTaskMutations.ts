@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BOARD_KEY, ME_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
-import type { Status, TaskInput } from '../../../app/types/types';
+import type { Board, Status, TaskInput } from '../../../app/types/types';
 import { addComment, createTask, deleteTask, moveTask, updateTask, uploadTasks } from '../../../services/api';
 
 /** Every task change can move cards, header counts and an open detail panel. */
@@ -37,11 +37,19 @@ export function useDeleteTask() {
   return useMutation({ mutationFn: (id: string) => deleteTask(id), onSuccess: refresh });
 }
 
+/** The card jumps to its new column at once; the refetch after (success or failure) puts the server's truth back. */
 export function useMoveTask() {
+  const qc = useQueryClient();
   const refresh = useRefresh();
   return useMutation({
     mutationFn: (v: { id: string; to: Status; note?: string; completedOn?: string }) => moveTask(v.id, v.to, v.note, v.completedOn),
-    onSuccess: refresh,
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: BOARD_KEY }); // a load in flight would overwrite the move with the old column
+      qc.setQueriesData<Board>({ queryKey: BOARD_KEY }, (board) =>
+        board && { ...board, tasks: board.tasks.map((t) => (t.id === v.id ? { ...t, status: v.to } : t)) },
+      );
+    },
+    onSettled: refresh,
   });
 }
 
