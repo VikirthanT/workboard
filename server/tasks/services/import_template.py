@@ -1,8 +1,8 @@
 """The bulk-upload spreadsheet: one .xlsx the manager downloads, fills in and uploads (a query: reads, changes nothing).
 
-The people dropdowns hold the email's username, the part before the company domain ("asha.k" for
-asha.k@atimotors.com). The upload adds the domain back, so a renamed person still matches. The People sheet also
-lists each person's name and Slack ID for lookup. The lists are written from the directory each time the template
+The people dropdowns hold "Name (email)" ("Asha K (asha.k@atimotors.com)"). The upload matches on the email in the
+brackets only, so a person renamed since the download still matches. The People sheet also lists each person's
+name and Slack ID for lookup. The lists are written from the directory each time the template
 is downloaded, so a later Slack sync shows up on the next download.
 """
 import io
@@ -31,14 +31,16 @@ EXAMPLE_PREFIX = "[EXAMPLE]"  # the template's demo row starts with this; the up
 DATE_FORMAT = "dd-mmm-yyyy"  # a month name cannot be misread as day/month the way 03/04 can
 
 def person_label(person: Person) -> str:
-    """The username for company emails; the whole address for any other domain, so it stays unique."""
-    username, _, domain = person.email.partition("@")
-    return username if domain == settings.allowed_email_domain else person.email
+    """"Asha Rao (asha.r@atimotors.com)": the name to recognise, the email (unique) to match on upload."""
+    return f"{person.name} ({person.email})"
 
 
 def email_from_label(text: str) -> str | None:
-    """The email behind a dropdown value; a full address typed by hand is accepted too."""
+    """The email behind a dropdown value. Also accepted: a full address or a bare username typed by hand, and the
+    older templates' username-only dropdowns."""
     text = text.strip().lower()
+    if text.endswith(")") and "(" in text:  # "Name (email)": the last brackets, since a name may hold its own
+        text = text[:-1].rpartition("(")[2].strip()
     if not text or " " in text:
         return None
     return text if "@" in text else f"{text}@{settings.allowed_email_domain}"
@@ -62,7 +64,7 @@ def build_template(db: Session, team: Team) -> bytes:
         tasks.column_dimensions[get_column_letter(index)].width = 40 if name in ("Title", "Description") else 28
 
     lists = workbook.create_sheet(PEOPLE_SHEET)
-    lists.append(["Team members (Assignee)", "Everyone (Support)", "Priority", None, "Username", "Name", "Slack ID"])
+    lists.append(["Team members (Assignee)", "Everyone (Support)", "Priority", None, "Person", "Name", "Slack ID"])
     for row in range(max(len(members), len(people), len(PRIORITIES))):
         person = people[row] if row < len(people) else None
         lists.append([

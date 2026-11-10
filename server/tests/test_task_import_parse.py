@@ -29,15 +29,17 @@ def team_of(db, npi) -> Team:
 
 # ---- the template ----
 
-def test_the_template_lists_the_team_and_the_directory_by_username(directory, npi):
+def test_the_template_lists_the_team_and_the_directory_by_name_and_email(directory, npi, admin):
     res = directory.call(npi["asha"], "GET", "/tasks/import/template")
 
     assert res.status_code == 200 and "spreadsheetml" in res.headers["content-type"]
     people = load_workbook(io.BytesIO(res.content))["People"]
     assignees = {r[0] for r in people.iter_rows(min_row=2, values_only=True) if r[0]}
     everyone = {r[1] for r in people.iter_rows(min_row=2, values_only=True) if r[1]}
-    assert assignees == {"asha", "ravi"}  # Zoe is on no team
-    assert {"asha", "ravi", "zoe", "admin"} <= everyone
+    asha, ravi, zoe = (person_label(npi[k]) for k in ("asha", "ravi", "zoe"))
+    assert assignees == {asha, ravi}  # Zoe is on no team
+    assert asha == f"Asha ({npi['asha'].email})"
+    assert {asha, ravi, zoe, person_label(admin)} <= everyone
     slack_ids = {r[6] for r in people.iter_rows(min_row=2, values_only=True) if r[6]}
     assert npi["ravi"].slack_user_id in slack_ids
 
@@ -48,7 +50,7 @@ def test_the_template_has_a_grey_example_row_and_readable_dates(directory, npi):
     tasks = load_workbook(io.BytesIO(res.content))["Tasks"]
     row = {c.value: tasks.cell(row=2, column=i).value for i, c in enumerate(tasks[1], start=1)}
     assert str(row["Title *"]).startswith("[EXAMPLE]")
-    assert row["Assignee *"] in {"asha", "ravi"}  # a real person on the team, so the demo looks right
+    assert row["Assignee *"] in {person_label(npi["asha"]), person_label(npi["ravi"])}  # a real person on the team, so the demo looks right
     assert tasks["I2"].number_format == "dd-mmm-yyyy" and tasks["H9"].number_format == "dd-mmm-yyyy"
     assert tasks["A2"].font.italic
 
@@ -79,6 +81,9 @@ def test_a_label_round_trips_to_the_email(directory):
     ravi = directory.person("Ravi")
     assert email_from_label(person_label(ravi)) == ravi.email
     assert email_from_label("Ravi@AtiMotors.com ") == ravi.email
+    username = ravi.email.partition("@")[0]
+    assert email_from_label(username) == ravi.email  # older templates held only the username
+    assert email_from_label(f"Ravi (Tools) ({ravi.email})") == ravi.email  # brackets in the name itself
 
 
 # ---- the parser ----
