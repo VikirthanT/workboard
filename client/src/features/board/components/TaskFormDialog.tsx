@@ -115,7 +115,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task-project">Project</Label>
-                <Input id="task-project" className="mt-2" value={f.project} onChange={(e) => set('project', e.target.value)} maxLength={100} placeholder="Optional" />
+                <Input id="task-project" className="mt-2 h-10 py-0 text-base" value={f.project} onChange={(e) => set('project', e.target.value)} maxLength={100} placeholder="Optional" />
               </div>
               <div>
                 <Label htmlFor="task-support">Support</Label>
@@ -123,7 +123,7 @@ export function TaskFormDialog({ open, me, task, defaultAssigneeId, onClose }: P
                   value={support?.id ?? NO_SUPPORT}
                   onValueChange={(id) => setSupport(id === NO_SUPPORT ? null : (people.data ?? []).find((p) => p.id === id) ?? support)}
                 >
-                  <SelectTrigger id="task-support" className="mt-2"><SelectValue>{support?.displayName ?? 'None'}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="task-support" className="mt-2 h-10 py-0"><SelectValue>{support?.displayName ?? 'None'}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectSearchInput value={q} onValueChange={setQ} placeholder="Search by name or email" aria-label="Search people" />
                     <SelectItem value={NO_SUPPORT}>No support</SelectItem>
