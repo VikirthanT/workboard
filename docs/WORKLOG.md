@@ -10,10 +10,10 @@ Day-by-day record for people who were not there. Newest entry first. Commit ids 
 | Admin Teams portal (`/admin`) | Rebuilt on the real API (17 Oct): grouped collapsible teams, search, role filter, Manager / Member dropdown, Admin tick, dustbin, create / delete team, paged audit log. Looked at in a browser, light and dark (Teams tab light, Audit tab dark); dialogs not yet clicked through; no component tests yet |
 | Manager My team (`/team`) and "No team yet" page | My team rebuilt on the real API (search, add, dustbin); not yet looked at in a browser after the rebuild |
 | Board (one per team) | On the real API; home for every role; drag to move (Resume button on a blocked task); admins may comment on any board; five cards per column with "Load more" and a five-minute client cache (10 Nov); looked at in a browser, light and dark. Some of 17 Oct's changes (admin comments, delete / reassign audit) and all of 10 Nov's (paging, import confirmation) not yet looked at in a browser |
-| Standup suggestions (inbox, lifecycle rules, standup-DB reader and Groq extraction design) and the weekly handover note | Moved out of this branch to the snapshot folder `workboard-suggestions-snapshot`, to come back on a later branch |
+| Standup suggestions (inbox, lifecycle rules, standup-DB reader and Groq extraction design) and the weekly handover note | Suggestions are back (13 Nov, `8aa2672`): `server/standups/`, `client/src/features/suggestions/`, a scheduler read from `STANDUP_SYNC_SCHEDULE`; faked in tests, not tried against the real standup database. The weekly handover note is still out (snapshot folder `workboard-suggestions-snapshot`) |
 | Backend (FastAPI + Postgres) | Identity (people, teams, admin, audit), tasks (tasks, timeline, comments, board query, team reports) and auth (Google sign-in, signed tokens) built, plus bulk import from Excel, sign-out of every session, sign-in audit and rate limits (10 Nov), board paging and import confirmation (10 Nov, later); 739 server tests pass (10 Nov, later; coverage last measured at 100% on 19 Oct, not re-measured) (Google faked). The frontend talks to it for everything. Google sign-in not yet tried against real Google. |
 | Local setup and production stack | `.env` (copy `.env.example`) drives `make dev` and `make prod-up`; the database password and URL are in no source file; `docker-compose.dev.yml`, `docker-compose.yml` (prod) and `Dockerfile.api` added |
-| Slack bot and the weekly Slack directory pull (both Phase 2) | Not started; data model carries `accepted_at` and comment `source`; until the pull exists the directory loads from a file (`make db-seed`) |
+| Slack bot (13 Nov, `8aa2672`) and the weekly Slack directory pull (Phase 2) | Bot built: DM card per task, status moves and comments in its thread, a channel post with a PDF for bulk and standup additions (`server/slack/`, `docs/SLACK_SETUP.md`); not tried against real Slack. The directory pull is not started; data model carries `accepted_at` and comment `source`; until the pull exists the directory loads from a file (`make db-seed`) |
 | Frontend tests | 198 vitest tests on 10 Nov, later (pure code, error boundary, `services/requests.test.ts` pinning every service route, and component tests for every item in `refdocs/checklist.md` 4.2: team components, dialogs, admin screens, task form and sheet, `DatePicker`, `Select`, login page); `make test` also guards the production bundle. Rest of the component tests in progress (`refdocs/checklist.md` 4.2) |
 | Playwright specs | Set up (19 Oct): `make e2e`, two smoke specs (admin creates a team and reads the audit log; manager adds a task and drags it), on a throwaway database; not part of `make test` |
 | What is left | `refdocs/checklist.md` is the working list for the coming days |
@@ -61,6 +61,23 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Person:** a people-directory entry (name, email, Slack ID). Never signs in; an assignee.
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
+
+## 13 Nov 2026: standup suggestions, the Slack bot, task numbers, overdue chip
+
+**Summary.** On `feature-update/suggestion` (based on `7439cb4`, the tip of `dev`): three commits. The overdue chip says how many days; the reason and comment boxes lose their placeholder text; and one large commit adds standup suggestions, the Slack bot and task numbers together, because they share models, config and wiring and could not be split cleanly.
+
+**Commits (oldest first).**
+- `888549b` Show how many days a task is overdue on its card (`client/src/app/lib/format.ts` `formatOverdue`, `TaskCard.tsx`).
+- `096a1e1` Remove the helper text from the reason and comment boxes (`ReasonDialog.tsx`, one hunk of `TaskDetailSheet.tsx`).
+- `8aa2672` Add standup suggestions, the Slack bot and task numbers (129 files). Migrations `0006` to `0011`: team standup channel, suggestions, Slack outbox, DM cards, DM thread messages, `tasks.number`. Code: `server/standups/`, `server/slack/`, `server/models/slack.py`, `server/models/suggestions.py`, `client/src/features/suggestions/`. Board cards now sort by last change, newest first. Settings and the scheduler service are in `.env.example`, `server/core/config.py`, `docker-compose.yml`, `Makefile`.
+
+**What you will see.** A red "Overdue by N days" chip; no grey text inside the reason and comment boxes; a Suggestions page and header link for managers; "Task #N" in the open task panel. With Slack set up: each assignee gets a DM card, every status move and comment appears in its thread (the Review column reads "Review" in Slack), and the team's channel gets "Added tasks" for a bulk upload or "Tasks from Standup" for standup suggestions, one line per person with a count, plus a PDF named `Task-13-Nov-2026.pdf`. A task created one at a time posts nothing in the channel. The two headings are constants at the top of `server/slack/messages.py`.
+
+**Rules decided today.** The channel post only for bulk upload and standup additions; the DM always. Every status change by anyone goes to the DM thread. The weekly standup read never creates or deletes tasks, a newer standup only replaces the person's older pending or rejected suggestions; its timetable lives in `STANDUP_SYNC_SCHEDULE`.
+
+**Checked.** `make server-test`: 938 passed, 0 failed. Client: `tsc` clean, vitest 241 of 241 passed. The commits were not tested one by one, only the final state.
+
+**Not done or not checked.** The Slack reminder for tasks due within 2 days is not built (needs a daily scheduled job). Nothing was looked at in a browser, light or dark, and nothing was tried against real Slack or the real standup database. A bulk-upload or standup post that fails to send and is retried may carry the other source's heading (the heading comes from the flush that runs; fix by storing the source on the outbox row). Not pushed, no pull request opened. The `ide` connection dropped once during the session and was reconnected.
 
 ## 10 Nov 2026 (later): board loads five per column, import confirmation, template labels
 
