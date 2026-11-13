@@ -3,7 +3,7 @@ import { ArrowBendUpLeft, Prohibit } from '@phosphor-icons/react';
 import { Avatar } from '../../../app/components/ui/avatar';
 import { Badge } from '../../../app/components/ui/badge';
 import { cn } from '../../../app/lib/utils';
-import { formatDue } from '../../../app/lib/format';
+import { formatDue, formatOverdue } from '../../../app/lib/format';
 import type { Task } from '../../../app/types/types';
 
 interface Props extends HTMLAttributes<HTMLDivElement> {
@@ -53,7 +53,7 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard({ ta
         <span className={cn('inline-flex items-center rounded-sm border px-1.5 py-px text-xs font-semibold leading-[1.5]', PRIORITY_STYLE[task.priority].tag)}>
           {PRIORITY_STYLE[task.priority].label}<span className="sr-only"> priority</span>
         </span>
-        {task.overdue && <Flag tone="danger">Overdue</Flag>}
+        {task.overdue && task.dueAt && <Flag tone="danger">{formatOverdue(task.dueAt)}</Flag>}
         {task.dueSoon && <Flag tone="warning">Due soon</Flag>}
         {task.needsReassignment && <Flag tone="warning">Needs reassignment</Flag>}
         {task.returned && (
