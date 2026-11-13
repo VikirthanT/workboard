@@ -7,13 +7,13 @@ import { Textarea } from '../../../app/components/ui/textarea';
 import { todayISO } from '../../../app/domain/dates';
 import type { Task, Transition } from '../../../app/types/types';
 
-const COPY: Partial<Record<Transition['kind'], { title: string; help: string; cta: string; label?: string }>> = {
-  accept: { title: 'Accept and mark Done', help: 'Remarks for the record: what was checked, anything to note.', cta: 'Accept', label: 'Remarks' },
-  complete: { title: 'Mark as Done', help: 'Remarks for the record: what was checked, anything to note.', cta: 'Mark done', label: 'Remarks' },
-  block: { title: 'Mark as blocked', help: 'What is in the way? It is shown on the card.', cta: 'Mark blocked' },
-  send_back: { title: 'Send back for changes', help: 'What needs to change? It is shown on the card.', cta: 'Send back' },
-  reopen: { title: 'Reopen task', help: 'Why does this need more work?', cta: 'Reopen' },
-  move_back: { title: 'Move back to To Do', help: 'Why is this moving backwards? The reason is kept on the task.', cta: 'Move back' },
+const COPY: Partial<Record<Transition['kind'], { title: string; cta: string; label?: string }>> = {
+  accept: { title: 'Accept and mark Done', cta: 'Accept', label: 'Remarks' },
+  complete: { title: 'Mark as Done', cta: 'Mark done', label: 'Remarks' },
+  block: { title: 'Mark as blocked', cta: 'Mark blocked' },
+  send_back: { title: 'Send back for changes', cta: 'Send back' },
+  reopen: { title: 'Reopen task', cta: 'Reopen' },
+  move_back: { title: 'Move back to To Do', cta: 'Move back' },
 };
 
 interface Props {
@@ -53,7 +53,7 @@ export function ReasonDialog({ pending, busy, error, onCancel, onConfirm }: Prop
           </DialogHeader>
           <DialogBody>
             <Label htmlFor="reason">{copy?.label ?? 'Reason'}<span aria-hidden className="text-danger"> *</span><span className="sr-only"> (required)</span></Label>
-            <Textarea id="reason" className="mt-2" autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={copy?.help} maxLength={500} />
+            <Textarea id="reason" className="mt-2" autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
             {asksDay && pending && (
               <div className="mt-4">
                 <Label htmlFor="completed-on">Completed on</Label>

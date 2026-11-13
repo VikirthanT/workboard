@@ -52,7 +52,7 @@ function CommentBox({ taskId }: { taskId: string }) {
       }}
     >
       <Label htmlFor="task-comment">Add a comment</Label>
-      <Textarea id="task-comment" value={text} onChange={(e) => setText(e.target.value)} placeholder="Share an update or ask a question" maxLength={1000} />
+      <Textarea id="task-comment" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
       <Button type="submit" variant="outline" size="sm" className="self-end" disabled={!text.trim() || add.isPending}>Comment</Button>
     </form>
   );
