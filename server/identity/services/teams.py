@@ -45,7 +45,8 @@ def get_team_with_count(db: Session, team_id: uuid.UUID) -> tuple[Team, int]:
 # ---- commands ----
 
 def create_team(
-    db: Session, actor: Person, team_id: uuid.UUID, name: str, initial_person_id: uuid.UUID, reason: str
+    db: Session, actor: Person, team_id: uuid.UUID, name: str, initial_person_id: uuid.UUID, reason: str,
+    standup_channel_id: str,
 ) -> None:
     """New team plus its first person, who becomes the manager, in one transaction.
 
@@ -55,10 +56,13 @@ def create_team(
     name = name.strip()
     if not name:
         raise AppError("name_required", "Give the team a name.", 422)
+    channel = _clean_channel(standup_channel_id)
+    if channel is None:
+        raise AppError("channel_required", "Choose the team's standup channel.", 422)
     person = get_person(db, initial_person_id, lock=True)
     _check_can_run(person)
 
-    team = Team(id=team_id, name=name)
+    team = Team(id=team_id, name=name, standup_channel_id=channel)
     db.add(team)
     try:
         db.flush()
@@ -71,7 +75,27 @@ def create_team(
     team.manager_id = person.id
     audit.record(
         db, actor, states.TEAM_CREATE, team_id=team_id, person_id=person.id, reason=reason_text,
-        details={"name": name, "manager_id": str(person.id)},
+        details={"name": name, "manager_id": str(person.id), "standup_channel_id": channel},
+    )
+    db.commit()
+
+
+def set_standup_channel(
+    db: Session, actor: Person, team_id: uuid.UUID, standup_channel_id: str | None, reason: str
+) -> None:
+    """Set, change or clear the standup channel a team's suggestions are read from. Admins only, audited."""
+    require_admin(actor)
+    reason_text = audit.clean_reason(reason, required=True)
+    channel = _clean_channel(standup_channel_id)
+    team = get_team(db, team_id, lock=True)
+    if channel == team.standup_channel_id:
+        raise AppError("same_channel", "The team already uses that standup channel.", 409)
+
+    old_channel = team.standup_channel_id
+    team.standup_channel_id = channel
+    audit.record(
+        db, actor, states.TEAM_STANDUP_CHANNEL_CHANGE, team_id=team.id, reason=reason_text,
+        details={"old_channel_id": old_channel, "new_channel_id": channel},
     )
     db.commit()
 
@@ -134,6 +158,14 @@ def delete_team(db: Session, actor: Person, team_id: uuid.UUID, confirm_name: st
 
 
 # ---- rules ----
+
+def _clean_channel(value: str | None) -> str | None:
+    """Blank means no channel. A Slack channel id has no spaces, so anything with one was typed wrong."""
+    cleaned = (value or "").strip()
+    if " " in cleaned:
+        raise AppError("invalid_channel", "A standup channel id has no spaces (it looks like C0123ABCD).", 422)
+    return cleaned or None
+
 
 def _check_can_run(person: Person, team: Team | None = None) -> None:
     """Who may be made a team's manager: an active member (admin or not) on no team, or already on this one."""

@@ -30,6 +30,7 @@ def _team_response(team: Team, member_count: int) -> schemas.TeamResponse:
         active=team.active,
         manager=schemas.PersonResponse.model_validate(team.manager) if team.manager else None,
         member_count=member_count,
+        standup_channel_id=team.standup_channel_id,
     )
 
 
@@ -48,13 +49,34 @@ def create_team(body: schemas.TeamCreate, db: Session = Depends(get_db), actor: 
     """Create a team and make its first person the manager, in one step.
 
     Who: admins only (403 `forbidden`).
-    Body: {name, initial_manager_person_id, reason}. The reason is required and goes to the audit log.
-    The person must be active, on no team, and not already a manager; they become the team's manager.
+    Body: {name, initial_manager_person_id, reason, standup_channel_id}. The reason is required and goes to the
+    audit log; so is the standup channel (the team's suggestions are read from it). The person must be active, on no
+    team, and not already a manager; they become the team's manager.
     Errors: 409 `team_name_taken` (names are unique, ignoring case); 409 `person_inactive`,
-    `already_manager` or `already_on_team`; 422 `name_required`; 404 `person_not_found`.
+    `already_manager` or `already_on_team`; 422 `name_required`, `channel_required`, `invalid_channel`;
+    404 `person_not_found`.
     """
     team_id = uuid.uuid4()
-    teams.create_team(db, actor, team_id, body.name, body.initial_manager_person_id, body.reason)
+    teams.create_team(
+        db, actor, team_id, body.name, body.initial_manager_person_id, body.reason, body.standup_channel_id
+    )
+    return _team_response(*teams.get_team_with_count(db, team_id))
+
+
+@router.patch("/{team_id}/standup-channel", response_model=schemas.TeamResponse)
+def change_standup_channel(
+    team_id: uuid.UUID,
+    body: schemas.StandupChannelChange,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
+    """Set, change or clear the standup channel the team's suggestions are read from.
+
+    Who: admins only (403 `forbidden`).
+    Body: {standup_channel_id (null or blank clears it), reason}. The reason is required and goes to the audit log.
+    Errors: 409 `same_channel` (no change); 422 `invalid_channel`; 404 `team_not_found`.
+    """
+    teams.set_standup_channel(db, actor, team_id, body.standup_channel_id, body.reason)
     return _team_response(*teams.get_team_with_count(db, team_id))
 
 

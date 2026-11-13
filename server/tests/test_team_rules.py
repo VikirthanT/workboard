@@ -30,7 +30,7 @@ def test_an_inactive_person_cannot_start_a_team_or_become_a_manager(directory, a
     team = make_team(directory, admin, "NPI", asha)
 
     create = directory.call(
-        admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(sleepy.id), "reason": "r"}
+        admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(sleepy.id), "reason": "r", "standup_channel_id": "C0QA"}
     )
     change = change_manager(directory, admin, team, sleepy)
     assert (create.status_code, codes(create)) == (409, "person_inactive")
@@ -67,7 +67,7 @@ def test_a_refused_create_does_not_promote_the_person(directory, admin, db):
     ravi = directory.person("Ravi")
 
     res = directory.call(
-        admin, "POST", "/teams", json={"name": "npi", "initial_manager_person_id": str(ravi.id), "reason": "r"}
+        admin, "POST", "/teams", json={"name": "npi", "initial_manager_person_id": str(ravi.id), "reason": "r", "standup_channel_id": "C0NPI"}
     )
 
     assert res.status_code == 409 and codes(res) == "team_name_taken"

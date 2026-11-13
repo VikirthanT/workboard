@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from identity.states import MAX_REASON_LENGTH
+from identity.states import MAX_CHANNEL_ID_LENGTH, MAX_REASON_LENGTH
 
 Item = TypeVar("Item")
 
@@ -48,11 +48,19 @@ class TeamResponse(BaseModel):
     active: bool
     manager: PersonResponse | None
     member_count: int
+    standup_channel_id: str | None = None
 
 
 class TeamCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     initial_manager_person_id: uuid.UUID
+    reason: str = Field(max_length=MAX_REASON_LENGTH)
+    standup_channel_id: str = Field(max_length=MAX_CHANNEL_ID_LENGTH)
+
+
+class StandupChannelChange(BaseModel):
+    """null (or blank) clears the channel: the team then gets no suggestions."""
+    standup_channel_id: str | None = Field(max_length=MAX_CHANNEL_ID_LENGTH)
     reason: str = Field(max_length=MAX_REASON_LENGTH)
 
 

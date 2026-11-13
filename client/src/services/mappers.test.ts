@@ -2,13 +2,13 @@
    The payloads are synthetic. If the server's shape changes, this is where the client finds out. */
 import { describe, expect, it } from 'vitest';
 import type { WireActivity, WireBoardTeam, WireIdentity, WireTask } from './backendTypes';
-import { mapActivity, mapBoardTeam, mapPerson, mapRealMe, mapTask, runsTeam } from './mappers';
+import { mapActivity, mapBoardTeam, mapPerson, mapRealMe, mapStandupChannel, mapSuggestionsPage, mapTask, mapTeam, runsTeam } from './mappers';
 
 const ravi = { id: 'p-ravi', name: 'Ravi', email: 'ravi@atimotors.com', active: true };
 const asha = { id: 'p-asha', name: 'Asha', email: 'asha@atimotors.com', active: true };
 
 const serverTask = (over: Partial<WireTask> = {}): WireTask => ({
-  id: 't1', team_id: 'team1', title: 'Wire harness', description: '', status: 'blocked', priority: 'high', due_at: '2026-10-30',
+  id: 't1', number: 7, team_id: 'team1', title: 'Wire harness', description: '', status: 'blocked', priority: 'high', due_at: '2026-10-30',
   creator: asha, assignee: ravi, support: null, project: null, returned_count: 0,
   created_at: '2026-10-17T08:00:00Z', updated_at: '2026-10-17T09:00:00Z', closed_at: null,
   overdue: false, due_soon: true, needs_reassignment: false, returned: false,
@@ -20,10 +20,61 @@ const serverTask = (over: Partial<WireTask> = {}): WireTask => ({
   ...over,
 });
 
+describe('server team and standup channel -> client', () => {
+  it('maps a team with and without a standup channel, and a channel by its Slack id', () => {
+    const wire = { id: 'team1', name: 'NPI', manager: null, member_count: 3, standup_channel_id: 'C0NPI' };
+
+    expect(mapTeam(wire).standupChannelId).toBe('C0NPI');
+    expect(mapTeam({ ...wire, standup_channel_id: null }).standupChannelId).toBeNull();
+    expect(mapStandupChannel({ slack_channel_id: 'C0NPI', name: 'standup-npi' })).toEqual({ id: 'C0NPI', name: 'standup-npi' });
+  });
+});
+
+describe('server suggestions page -> client', () => {
+  const wireSuggestion = {
+    id: 's1', person_id: 'p-ravi', title: 'Design weld jig', description: 'Ready.', kind: 'blocker', priority: 'high',
+    start_at: '2026-11-09', due_at: null, due_is_default: false, subtasks: ['table'], evidence_quote: 'Start the weld jig design',
+    related_to: 'Order samples', state: 'pending', late_reply: true, standup_date: '2026-11-09', task_id: null,
+  };
+
+  it('maps people, their standup (or none) and each suggestion to camelCase', () => {
+    const page = mapSuggestionsPage({
+      standup_channel_id: 'C0NPI',
+      last_synced_at: '2026-11-13T09:42:00Z',
+      standup_problem: 'unreadable',
+      people: [
+        {
+          person: { id: 'p-ravi', name: 'Ravi', email: 'ravi@atimotors.com', role: 'member' },
+          standup: { date: '2026-11-09', posted_at: '2026-11-11T04:09:21Z', late_reply: true, last_week: '- a', this_week: '- b', blockers: null, message: null },
+          suggestions: [wireSuggestion],
+        },
+        { person: { id: 'p-asha', name: 'Asha', email: 'asha@atimotors.com', role: 'manager' }, standup: null, suggestions: [] },
+      ],
+    });
+
+    expect(page.standupChannelId).toBe('C0NPI');
+    expect(page.lastSyncedAt).toBe('2026-11-13T09:42:00Z');
+    expect(page.standupProblem).toBe('unreadable');
+    expect(mapSuggestionsPage({ standup_channel_id: null, last_synced_at: null, standup_problem: 'something new', people: [] }).standupProblem).toBeNull();
+    expect(page.people[0].person).toEqual({ id: 'p-ravi', displayName: 'Ravi', email: 'ravi@atimotors.com', role: 'member' });
+    expect(page.people[0].standup).toEqual({
+      date: '2026-11-09', postedAt: '2026-11-11T04:09:21Z', lateReply: true, lastWeek: '- a', thisWeek: '- b', blockers: null, message: null,
+    });
+    expect(page.people[0].suggestions[0]).toEqual({
+      id: 's1', personId: 'p-ravi', title: 'Design weld jig', description: 'Ready.', kind: 'blocker', priority: 'high',
+      startAt: '2026-11-09', dueAt: null, dueIsDefault: false, subtasks: ['table'], evidenceQuote: 'Start the weld jig design',
+      relatedTo: 'Order samples', state: 'pending', lateReply: true, standupDate: '2026-11-09', taskId: null,
+    });
+    expect(page.people[1].person.role).toBe('manager');
+    expect(page.people[1].standup).toBeNull();
+  });
+});
+
 describe('server task -> client task', () => {
   it('maps people by their `name`, the reason, and the actions the server allows', () => {
     const task = mapTask(serverTask());
 
+    expect(task.number).toBe(7);
     expect(task.assignee.displayName).toBe('Ravi');
     expect(task.creator.displayName).toBe('Asha');
     expect(task.latestReason).toEqual({ kind: 'blocked', note: 'waiting on supplier', at: '2026-10-17T09:00:00Z', actorName: 'Asha' });

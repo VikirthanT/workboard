@@ -1,12 +1,13 @@
 /* wire (snake_case) -> frontend (camelCase). The single boundary between backendTypes and app/types. */
 import type {
-  ActivityItem, AllTeamsReport, AuditEntry, BoardTeam, Me, Page, PersonRecord, PersonSummary, ReportBlock, Task, TaskReason,
-  TeamRecord, TeamReport, TeamsBlock,
+  ActivityItem, AllTeamsReport, AuditEntry, BoardTeam, Me, Page, PersonRecord, PersonSummary, Priority, ReportBlock, Task, TaskReason,
+  StandupChannel, StandupPost, Suggestion, SuggestionKind, SuggestionsPage, SuggestionState, TeamRecord, TeamReport, TeamsBlock,
 } from '../app/types/types';
 import type { ReportCounts } from '../app/domain/report';
 import type {
   WireActivity, WireAllTeamsReport, WireAudit, WireBoard, WireBoardTeam, WireIdentity, WirePage, WirePersonSummary,
-  WireReportBlock, WireReportCounts, WireTask, WireTeam, WireTeamReport, WireTeamsBlock,
+  WireReportBlock, WireReportCounts, WireStandupChannel, WireStandupPost, WireSuggestion, WireSuggestionsPage, WireTask, WireTeam,
+  WireTeamReport, WireTeamsBlock,
 } from './backendTypes';
 
 export const mapSummary = (p: WirePersonSummary): PersonSummary => ({ id: p.id, displayName: p.name, email: p.email, active: p.active });
@@ -46,10 +47,36 @@ export const mapPerson = (p: WireIdentity): PersonRecord => ({
 
 export const mapTeam = (t: WireTeam): TeamRecord => ({
   id: t.id, name: t.name, manager: t.manager ? mapSummary(t.manager) : null, memberCount: t.member_count,
+  standupChannelId: t.standup_channel_id,
+});
+
+export const mapStandupChannel = (c: WireStandupChannel): StandupChannel => ({ id: c.slack_channel_id, name: c.name });
+
+export const mapSuggestion = (s: WireSuggestion): Suggestion => ({
+  id: s.id, personId: s.person_id, title: s.title, description: s.description, kind: s.kind as SuggestionKind,
+  priority: s.priority as Priority, startAt: s.start_at, dueAt: s.due_at, dueIsDefault: s.due_is_default, subtasks: s.subtasks,
+  evidenceQuote: s.evidence_quote, relatedTo: s.related_to, state: s.state as SuggestionState, lateReply: s.late_reply,
+  standupDate: s.standup_date, taskId: s.task_id,
+});
+
+const mapStandupPost = (p: WireStandupPost): StandupPost => ({
+  date: p.date, postedAt: p.posted_at, lateReply: p.late_reply, lastWeek: p.last_week, thisWeek: p.this_week, blockers: p.blockers, message: p.message,
+});
+
+export const mapSuggestionsPage = (p: WireSuggestionsPage): SuggestionsPage => ({
+  standupChannelId: p.standup_channel_id,
+  lastSyncedAt: p.last_synced_at,
+  standupProblem: ['not_configured', 'unreadable', 'channel_empty'].includes(p.standup_problem ?? '') ? (p.standup_problem as SuggestionsPage['standupProblem']) : null,
+  people: p.people.map((e) => ({
+    person: { id: e.person.id, displayName: e.person.name, email: e.person.email, role: e.person.role === 'manager' ? 'manager' : 'member' },
+    standup: e.standup ? mapStandupPost(e.standup) : null,
+    suggestions: e.suggestions.map(mapSuggestion),
+  })),
 });
 
 export const mapTask = (t: WireTask): Task => ({
   id: t.id,
+  number: t.number,
   title: t.title,
   description: t.description,
   status: t.status as Task['status'],

@@ -16,9 +16,16 @@ export async function getTeamMembers(teamId: string): Promise<PersonRecord[]> {
 }
 
 /** The team starts with one person, who becomes its manager. */
-export async function createTeam(p: { name: string; initialManagerPersonId: string; reason: string }): Promise<TeamRecord> {
-  const { data } = await apiClient.post<WireTeam>('/teams', { name: p.name, initial_manager_person_id: p.initialManagerPersonId, reason: p.reason });
+export async function createTeam(p: { name: string; initialManagerPersonId: string; reason: string; standupChannelId: string }): Promise<TeamRecord> {
+  const { data } = await apiClient.post<WireTeam>('/teams', {
+    name: p.name, initial_manager_person_id: p.initialManagerPersonId, reason: p.reason, standup_channel_id: p.standupChannelId,
+  });
   return mapTeam(data);
+}
+
+/** Set, change or clear (null) the standup channel the team's suggestions are read from. Admins only. */
+export async function setStandupChannel(p: { teamId: string; standupChannelId: string | null; reason: string }): Promise<void> {
+  await apiClient.patch(`/teams/${p.teamId}/standup-channel`, { standup_channel_id: p.standupChannelId, reason: p.reason });
 }
 
 /** Irreversible: the people go back to no team and the team's data is erased. `confirmName` must match the team's name. */

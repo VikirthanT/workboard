@@ -26,7 +26,7 @@ def test_non_ascii_text_is_stored_and_returned_exactly(directory, admin, npi):
 
 def test_non_ascii_team_names_reasons_and_search_work(directory, admin):
     lee = directory.person("Lee", email="lee@atimotors.com")
-    team = directory.call(admin, "POST", "/teams", json={"name": UNICODE, "initial_manager_person_id": str(lee.id), "reason": UNICODE})
+    team = directory.call(admin, "POST", "/teams", json={"name": UNICODE, "initial_manager_person_id": str(lee.id), "reason": UNICODE, "standup_channel_id": "C0LEE"})
     assert team.status_code == 201 and team.json()["name"] == UNICODE
     entry = directory.call(admin, "GET", "/audit-log").json()["items"][0]
     assert entry["reason"] == UNICODE and entry["team_name"] == UNICODE
@@ -47,8 +47,8 @@ def test_text_the_database_cannot_hold_is_a_422_not_a_500(directory, admin, npi)
         ("task edit", directory.call(npi["asha"], "PATCH", f"/tasks/{tid}", json={"title": f"a{NUL}b"})),
         ("comment", directory.call(npi["asha"], "POST", f"/tasks/{tid}/comments", json={"body": f"a{NUL}b"})),
         ("move note", directory.call(npi["asha"], "POST", f"/tasks/{tid}/status", json={"to": "blocked", "note": f"a{NUL}b"})),
-        ("team name", directory.call(admin, "POST", "/teams", json={"name": f"a{NUL}b", "initial_manager_person_id": str(lee.id), "reason": "r"})),
-        ("team reason", directory.call(admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(lee.id), "reason": f"a{NUL}b"})),
+        ("team name", directory.call(admin, "POST", "/teams", json={"name": f"a{NUL}b", "initial_manager_person_id": str(lee.id), "reason": "r", "standup_channel_id": "C0LEE"})),
+        ("team reason", directory.call(admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(lee.id), "reason": f"a{NUL}b", "standup_channel_id": "C0LEE"})),
         ("member reason", directory.call(admin, "POST", f"/teams/{npi['team']['id']}/members", json={"person_id": str(npi["zoe"].id), "reason": f"a{NUL}b"})),
         ("search", directory.call(admin, "GET", "/people?q=a%00b")),
     ]

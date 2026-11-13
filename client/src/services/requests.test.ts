@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { apiClient } from './axiosInstance';
 import { addMember, changeManager, createTeam, deleteTeam, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
 import { getAdmins, getAudit, searchPeople, setAdmin } from './admin';
+import { addSuggestions, editSuggestion, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from './standups';
 import { addComment, createTask, deleteTask, getBoard, getTask, moveTask, updateTask } from './tasks';
 import { getAllTeamsReport, getTeamReport } from './reports';
 import { devSignIn, endServerSession, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
@@ -14,7 +15,7 @@ vi.mock('./mappers', async (importOriginal) => {
   return {
     ...real,
     mapTeam: same, mapPerson: same, mapAudit: same, mapTask: same, mapActivity: same, mapSummary: same, mapBoardTeam: same,
-    mapTeamReport: same, mapAllTeamsReport: same, mapRealMe: same,
+    mapTeamReport: same, mapAllTeamsReport: same, mapRealMe: same, mapSuggestion: same, mapSuggestionsPage: same, mapStandupChannel: same,
     mapPage: (p: { items: unknown[] }, f: (x: unknown) => unknown) => ({ ...p, items: p.items.map(f) }),
   };
 });
@@ -45,8 +46,8 @@ describe('teams service', () => {
   });
 
   it('creates a team with POST /teams and snake_case keys', async () => {
-    await createTeam({ name: 'NPI', initialManagerPersonId: 'p1', reason: 'new team' });
-    expect(post).toHaveBeenCalledWith('/teams', { name: 'NPI', initial_manager_person_id: 'p1', reason: 'new team' });
+    await createTeam({ name: 'NPI', initialManagerPersonId: 'p1', reason: 'new team', standupChannelId: 'C0NPI' });
+    expect(post).toHaveBeenCalledWith('/teams', { name: 'NPI', initial_manager_person_id: 'p1', reason: 'new team', standup_channel_id: 'C0NPI' });
   });
 
   it('deletes a team with DELETE and the confirmation in the body', async () => {
@@ -79,6 +80,44 @@ describe('teams service', () => {
     expect(del).toHaveBeenLastCalledWith('/teams/t1/members/p2', { data: { reason: 'left' } });
     await removeMember({ teamId: 't1', personId: 'p2', reason: '' });
     expect(del).toHaveBeenLastCalledWith('/teams/t1/members/p2', { data: { reason: undefined } });
+  });
+});
+
+describe('standups service', () => {
+  it('lists the standup channels with GET /standups/channels', async () => {
+    await getStandupChannels();
+    expect(get).toHaveBeenCalledWith('/standups/channels');
+  });
+
+  it('reads a team\'s suggestions with GET and syncs with POST (both return the page)', async () => {
+    await getSuggestions('t1');
+    expect(get).toHaveBeenCalledWith('/teams/t1/suggestions');
+    await syncSuggestions({ teamId: 't1' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync');
+  });
+
+  it('syncs one person alone with the person_id query parameter', async () => {
+    await syncSuggestions({ teamId: 't1', personId: 'p2' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync', undefined, { params: { person_id: 'p2' } });
+  });
+
+  it('adds suggestions with POST and the ids in snake_case', async () => {
+    await addSuggestions({ teamId: 't1', suggestionIds: ['s1', 's2'] });
+    expect(post).toHaveBeenCalledWith('/teams/t1/suggestions/add', { suggestion_ids: ['s1', 's2'] });
+  });
+
+  it('edits with PATCH sending only the fields given, and a null date to clear it', async () => {
+    await editSuggestion({ id: 's1', patch: { priority: 'high', personId: 'p2', dueAt: null } });
+    const [url, body] = patch.mock.calls.at(-1)!;
+    expect(url).toBe('/suggestions/s1');
+    expect(JSON.parse(JSON.stringify(body))).toEqual({ priority: 'high', person_id: 'p2', due_at: null }); // undefined fields are dropped on the wire
+  });
+
+  it('rejects and restores with POST', async () => {
+    await rejectSuggestion('s1');
+    expect(post).toHaveBeenLastCalledWith('/suggestions/s1/reject');
+    await restoreSuggestion('s1');
+    expect(post).toHaveBeenLastCalledWith('/suggestions/s1/restore');
   });
 });
 

@@ -1,7 +1,10 @@
 import { keepPreviousData, useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { ADMINS_KEY, getAdminCandidatesKey, getAuditKey, getTeamMembersKey, TEAMS_KEY } from '../../../app/constants/queryKeys';
+import { ADMINS_KEY, getAdminCandidatesKey, getAuditKey, getTeamMembersKey, STANDUP_CHANNELS_KEY, TEAMS_KEY } from '../../../app/constants/queryKeys';
 import type { TeamRecord } from '../../../app/types/types';
-import { changeManager, createTeam, deleteTeam, getAdmins, getAudit, getTeamMembers, getTeams, searchPeople, setAdmin } from '../../../services/api';
+import {
+  changeManager, createTeam, deleteTeam, getAdmins, getAudit, getStandupChannels, getTeamMembers, getTeams, searchPeople, setAdmin,
+  setStandupChannel,
+} from '../../../services/api';
 import { useRefreshTeams } from '../../team/hooks';
 
 export const AUDIT_PAGE_SIZE = 50;
@@ -46,6 +49,15 @@ export function useDeleteTeam() {
 
 export function useChangeManager() {
   return useMutation({ mutationFn: changeManager, onSuccess: useRefreshTeams() });
+}
+
+/** The standup app's channels for the picker. Loaded only while a dialog that needs them is open; no retry, since a 501 means "not set up". */
+export function useStandupChannels(enabled: boolean) {
+  return useQuery({ queryKey: STANDUP_CHANNELS_KEY, queryFn: getStandupChannels, enabled, retry: false });
+}
+
+export function useSetStandupChannel() {
+  return useMutation({ mutationFn: setStandupChannel, onSuccess: useRefreshTeams() });
 }
 
 export function useSetAdmin() {

@@ -15,17 +15,20 @@ const h = vi.hoisted(() => ({
   audit: {} as Record<string, unknown>,
   auditPages: [] as number[],
   auditThrows: false,
+  channels: [] as { id: string; name: string }[],
 }));
 vi.mock('../../hooks', () => ({ useCurrentUser: () => ({ data: h.me }) }));
 vi.mock('./hooks', () => ({
   useTeams: () => h.teams,
   useAllTeamMembers: () => h.members,
   useAdmins: () => h.admins,
+  useStandupChannels: () => ({ data: h.channels }),
   useAudit: (page: number) => { if (h.auditThrows) throw new Error('boom'); h.auditPages.push(page); return h.audit; },
 }));
 // The dialogs have their own tests; here they only need to show that they opened.
 vi.mock('./CreateTeamDialog', () => ({ CreateTeamDialog: ({ open }: { open: boolean }) => open && <div>create-team-open</div> }));
 vi.mock('./DeleteTeamDialog', () => ({ DeleteTeamDialog: ({ team }: { team: { name: string } | null }) => team && <div>delete-open {team.name}</div> }));
+vi.mock('./EditStandupChannelDialog', () => ({ EditStandupChannelDialog: ({ team }: { team: { name: string } | null }) => team && <div>channel-open {team.name}</div> }));
 vi.mock('./AddAdminDialog', () => ({ AddAdminDialog: ({ open }: { open: boolean }) => open && <div>add-admin-open</div> }));
 vi.mock('./PersonDialogs', () => ({
   ManagerChangeDialog: () => null,
@@ -49,6 +52,7 @@ beforeEach(() => {
   h.audit = loaded({ items: [], total: 0, offset: 0, limit: 50 });
   h.auditPages = [];
   h.auditThrows = false;
+  h.channels = [];
 });
 
 describe('TeamsView', () => {
@@ -64,6 +68,22 @@ describe('TeamsView', () => {
     expect(screen.getByText('2 teams, 2 people')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Alpha' })).toBeInTheDocument();
     expect(screen.getByText('Bo Member')).toBeInTheDocument();
+  });
+
+  it('shows each team\'s standup channel by name, falls back to the id, and says when there is none', () => {
+    h.teams = loaded([team({ id: 't1', name: 'Alpha', standupChannelId: 'C0A' }), team({ id: 't2', name: 'Beta', standupChannelId: 'C0GONE' }), team({ id: 't3', name: 'Gamma' })]);
+    h.members = [loaded([]), loaded([]), loaded([])];
+    h.channels = [{ id: 'C0A', name: 'standup-alpha' }];
+    render(<TeamsView />);
+    expect(screen.getByRole('button', { name: 'Standup channel of Alpha' })).toHaveTextContent('standup-alpha');
+    expect(screen.getByRole('button', { name: 'Standup channel of Beta' })).toHaveTextContent('C0GONE');
+    expect(screen.getByRole('button', { name: 'Standup channel of Gamma' })).toHaveTextContent('No standup channel');
+  });
+
+  it('opens the standup channel dialog for the chosen team', async () => {
+    render(<TeamsView />);
+    await userEvent.click(screen.getByRole('button', { name: 'Standup channel of Beta' }));
+    expect(screen.getByText('channel-open Beta')).toBeInTheDocument();
   });
 
   it('shows the empty state, whose button opens Create team', async () => {

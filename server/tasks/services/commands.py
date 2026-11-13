@@ -14,11 +14,12 @@ from identity.services import audit
 from identity.services.lookup import get_person, get_team
 from models import Person, Task, Team
 from security import authorization
+from slack.services import dm, outbox
 from tasks import states
 from tasks.services import activity
 from tasks.services.deletion_audit import record_task_deleted
 from tasks.services.import_parse import ImportRow, RowError
-from tasks.services.lookup import get_task_and_team, own_team
+from tasks.services.lookup import get_task, get_task_and_team, own_team
 
 
 def create_task(
@@ -45,6 +46,16 @@ def create_task(
     db.commit()
 
 
+def add_task_uncommitted(
+    db: Session, actor: Person, team: Team, task_id: uuid.UUID, title: str, description: str, priority: str,
+    due_at: date | None, assignee_id: uuid.UUID, start_at: date | None = None, today: date | None = None,
+) -> None:
+    """For another feature that must create a task and update its own records in one transaction (standup
+    suggestions): the task rules are checked and the task and its first timeline entry are added, and the caller
+    commits. The caller has already checked that the actor may act on `team`."""
+    _add_task(db, actor, team, task_id, title, description, priority, due_at, assignee_id, today, None, None, None, start_at, announce=True)
+
+
 def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date | None = None, dry_run: bool = False) -> None:
     """Create every row on the actor's own team in one transaction: if any row breaks a task rule, none is saved
     and `ImportRejected` lists each row's problem. `dry_run` runs every check and then saves nothing (the preview)."""
@@ -54,7 +65,7 @@ def import_tasks(db: Session, actor: Person, rows: list[ImportRow], today: date 
         try:
             _add_task(
                 db, actor, team, uuid.uuid4(), row.title, row.description, row.priority, row.due_at,
-                row.assignee_id, today, row.support_id, row.project, row.stage, row.start_at,
+                row.assignee_id, today, row.support_id, row.project, row.stage, row.start_at, announce=True,
             )
         except AppError as err:
             errors.append(RowError(row.number, "", err.message))
@@ -88,10 +99,13 @@ def _add_task(
     project: str | None,
     stage: str | None,
     start_at: date | None,
+    announce: bool = False,
 ) -> None:
-    """Check and add one task and its first timeline entry; the caller commits."""
-    _require_not_past(due_at, today)
-    _require_start_not_after_due(start_at, due_at)
+    """Check and add one task and its first timeline entry; the caller commits. `announce` queues the team-channel
+    post (only bulk uploads and standup-suggestion batches do); the assignee's DM is always queued."""
+    require_not_past(due_at, today)
+    require_start_not_after_due(start_at, due_at)
+    assignee = _assignee_on(db, team, assignee_id)
     task = Task(
         id=task_id,
         team_id=team.id,
@@ -100,7 +114,7 @@ def _add_task(
         priority=priority,
         due_at=due_at,
         creator_id=actor.id,
-        assignee_id=_assignee_on(db, team, assignee_id).id,
+        assignee_id=assignee.id,
         support_id=_support(db, support_id).id if support_id else None,
         project=_label(project),
         stage=_label(stage),
@@ -109,6 +123,9 @@ def _add_task(
     db.add(task)
     db.flush()  # the timeline row below points at the task
     activity.record(db, actor, task, "created", new="todo")
+    if announce:
+        outbox.record_task_added(db, team.id, task.id)  # queued with the task, sent to the team's Slack channel afterwards
+    dm.record_dm(db, task, assignee)  # and a DM card for the assignee, if they have a real Slack id
 
 
 def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, today: date | None = None) -> None:
@@ -119,7 +136,7 @@ def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, t
     if task.status == "done":
         raise AppError("task_done", "A finished task cannot be edited. Reopen it first.", 409)
     if changes.get("due_at") != task.due_at:  # keeping an old date that has since passed is fine; choosing a past one is not
-        _require_not_past(changes.get("due_at"), today)
+        require_not_past(changes.get("due_at"), today)
     new_assignee = None
     if changes.get("assignee_id") not in (None, task.assignee_id):
         new_assignee = _assignee_on(db, team, changes["assignee_id"])
@@ -139,7 +156,7 @@ def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, t
     if "start_at" in changes and changes["start_at"] != task.start_at:
         edits.append((states.FIELD_START, task.start_at, changes["start_at"]))
         task.start_at = changes["start_at"]
-    _require_start_not_after_due(task.start_at, task.due_at)
+    require_start_not_after_due(task.start_at, task.due_at)
     for field, label in (("project", states.FIELD_PROJECT), ("stage", states.FIELD_STAGE)):
         if field in changes and _label(changes[field]) != getattr(task, field):
             edits.append((label, getattr(task, field), _label(changes[field])))
@@ -225,6 +242,48 @@ def move_task(
     db.commit()
 
 
+def move_task_as_assignee(
+    db: Session, actor: Person, task_id: uuid.UUID, to: str, note: str | None, source: str = "slack"
+) -> None:
+    """The person a task is assigned to moves it themselves, only as far as Review (see `authorization`). A reason is
+    required where the board requires one (Blocked). The move goes on the timeline under the assignee's own name, marked
+    with where it came from (`slack`), like any other move."""
+    task = get_task(db, task_id, lock=True)
+    if not authorization.is_assignee(actor, task):
+        raise AppError("forbidden", "Only the person this task is assigned to can move it.", 403)
+    move = next((m for m in authorization.assignee_transitions_for(actor, task) if m.to == to), None)
+    if move is None:
+        raise AppError("invalid_transition", f"You cannot move this task from {task.status} to {to}.", 409)
+    note_text = (note or "").strip()
+    if move.needs_reason and not note_text:
+        raise AppError("reason_required", "A reason is required for this change.", 422)
+    old_status = task.status
+    task.status = to
+    task.closed_at = None
+    activity.record(db, actor, task, "status", field=states.FIELD_STATUS, old=old_status, new=to, note=note_text or None, source=source)
+    db.commit()
+
+
+def add_comment_as_assignee(
+    db: Session, actor: Person, task_id: uuid.UUID, entry_id: uuid.UUID, body: str, source: str = "slack"
+) -> None:
+    """The person a task is assigned to comments on it (the Comment button in their Slack DM). It goes on the timeline
+    under their own name, marked with where it came from, until the task is Done."""
+    task = get_task(db, task_id, lock=True)
+    if not authorization.is_assignee(actor, task):
+        raise AppError("forbidden", "Only the person this task is assigned to can comment from here.", 403)
+    if not authorization.can_assignee_comment(actor, task):
+        raise AppError("task_done", "A finished task takes no comments.", 409)
+    text = body.strip()
+    if not text:
+        raise AppError("comment_required", "Write a comment first.", 422)
+    if len(text) > states.MAX_COMMENT_LENGTH:
+        raise AppError("comment_too_long", f"A comment can be at most {states.MAX_COMMENT_LENGTH} characters.", 422)
+    activity.record(db, actor, task, "comment", entry_id=entry_id, note=text, source=source)
+    task.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+
 def add_comment(db: Session, actor: Person, task_id: uuid.UUID, entry_id: uuid.UUID, body: str) -> None:
     task, team = get_task_and_team(db, task_id, lock=True)
     authorization.require_view_team(actor, team)  # the team's manager or any admin
@@ -240,13 +299,14 @@ def add_comment(db: Session, actor: Person, task_id: uuid.UUID, entry_id: uuid.U
 
 # ---- rules ----
 
-def _require_not_past(due_at: date | None, today: date | None) -> None:
-    """A due date is today or later (no date at all is fine). `today` is the server's date; tests pass their own."""
+def require_not_past(due_at: date | None, today: date | None = None) -> None:
+    """A due date is today or later (no date at all is fine). `today` is the server's date; tests pass their own.
+    Public because the standup suggestions apply the same rule when they choose or edit a date."""
     if due_at is not None and due_at < (today or date.today()):
         raise AppError("due_date_past", "The due date cannot be in the past.", 422)
 
 
-def _require_start_not_after_due(start_at: date | None, due_at: date | None) -> None:
+def require_start_not_after_due(start_at: date | None, due_at: date | None) -> None:
     if start_at is not None and due_at is not None and start_at > due_at:
         raise AppError("start_after_due", "The start date cannot be after the due date.", 422)
 

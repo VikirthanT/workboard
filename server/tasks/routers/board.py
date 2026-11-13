@@ -43,8 +43,8 @@ def board(
       attention  true keeps only what needs the manager: overdue, blocked, in Review, or without an owner
       limit      the most cards sent per column (all when left out); `column_totals` gives each column's full count
       show       comma list of status:count raising `limit` for single columns ("Load more"); a bad one is 422 `invalid_show`
-    Open columns come most urgent first (overdue, then soonest due, then most recently changed).
-    Done cards never leave the board: the Done column lists the most recently closed first.
+    Every column comes with the most recently changed card first (a move, an edit, a reassignment or a comment counts).
+    Done cards never leave the board: they stay in the Done column, ordered the same way.
     `filter_counts` says how many cards each filter would show right now, so the menu can show it before you pick.
     """
     chosen = queries.resolve_board_team(db, actor, team)

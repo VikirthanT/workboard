@@ -15,8 +15,9 @@ import { AdminsPanel } from './AdminsPanel';
 import { AuditLog } from './AuditLog';
 import { CreateTeamDialog } from './CreateTeamDialog';
 import { DeleteTeamDialog } from './DeleteTeamDialog';
+import { EditStandupChannelDialog } from './EditStandupChannelDialog';
 import { AdminToggleDialog, ManagerChangeDialog } from './PersonDialogs';
-import { useAllTeamMembers, useTeams } from './hooks';
+import { useAllTeamMembers, useStandupChannels, useTeams } from './hooks';
 
 /**
  * The admin's portal: every team as a collapsible group with its people, a search box and role filter, a Manager /
@@ -28,12 +29,14 @@ export function TeamsView() {
   const teams = useTeams(!!me?.isAdmin);
   const list = teams.data ?? [];
   const memberQueries = useAllTeamMembers(list);
+  const channelNames = new Map((useStandupChannels(!!me?.isAdmin).data ?? []).map((c) => [c.id, c.name]));
 
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<RoleFilter>('all');
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState<TeamRecord | null>(null);
   const [deleting, setDeleting] = useState<TeamRecord | null>(null);
+  const [editingChannel, setEditingChannel] = useState<TeamRecord | null>(null);
   const [removing, setRemoving] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
   const [promoting, setPromoting] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
   const [adminChange, setAdminChange] = useState<{ person: PersonRecord; isAdmin: boolean } | null>(null);
@@ -94,6 +97,8 @@ export function TeamsView() {
                   totalMembers={all.length}
                   onAdd={() => setAdding(team)}
                   onDeleteTeam={() => setDeleting(team)}
+                  onEditChannel={() => setEditingChannel(team)}
+                  channelName={team.standupChannelId ? channelNames.get(team.standupChannelId) : undefined}
                   onRemove={(person) => setRemoving({ team, person })}
                   onMakeManager={(person) => setPromoting({ team, person })}
                   onToggleAdmin={(person, isAdmin) => setAdminChange({ person, isAdmin })}
@@ -112,6 +117,7 @@ export function TeamsView() {
 
       <CreateTeamDialog open={creating} onClose={() => setCreating(false)} />
       <DeleteTeamDialog team={deleting} onClose={() => setDeleting(null)} />
+      <EditStandupChannelDialog team={editingChannel} onClose={() => setEditingChannel(null)} />
       {adding && <AddMemberDialog open teamId={adding.id} teamName={adding.name} reasonOptional onClose={() => setAdding(null)} />}
       {removing && <RemoveMemberDialog team={removing.team} person={removing.person} reasonOptional={false} onClose={() => setRemoving(null)} />}
       {promoting && <ManagerChangeDialog team={promoting.team} person={promoting.person} onClose={() => setPromoting(null)} />}

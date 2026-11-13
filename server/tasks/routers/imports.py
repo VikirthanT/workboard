@@ -2,7 +2,7 @@
 
 Registered before `tasks.py` so `/tasks/import/...` is never read as `/tasks/{id}`.
 """
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile  # what request.form() returns (not fastapi's subclass)
@@ -12,6 +12,7 @@ from database.config import get_db
 from models import Person
 from security import rate_limit
 from security.authentication import get_current_person
+from slack.services import announce
 from tasks.services import commands, import_parse, import_template
 from tasks.services.lookup import own_team
 
@@ -38,6 +39,7 @@ def download_template(db: Session = Depends(get_db), actor: Person = Depends(get
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_tasks(
     request: Request,
+    background: BackgroundTasks,
     preview: bool = False,
     rows_: str = Query(default="", alias="rows", description="Comma-separated sheet row numbers to add; all when left out"),
     db: Session = Depends(get_db),
@@ -86,4 +88,5 @@ async def upload_tasks(
         )
     if preview:
         return JSONResponse(status_code=200, content={"tasks": import_parse.preview(db, rows)})
+    background.add_task(announce.flush_team, team.id)  # the assignees' DM cards; imports are not announced in the channel
     return {"created": len(rows)}

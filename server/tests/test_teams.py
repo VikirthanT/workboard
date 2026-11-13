@@ -14,7 +14,7 @@ def test_create_team_promotes_initial_person(directory, admin, db):
 def test_create_team_needs_a_reason(directory, admin):
     asha = directory.person("Asha")
     res = directory.call(
-        admin, "POST", "/teams", json={"name": "NPI", "initial_manager_person_id": str(asha.id), "reason": "  "}
+        admin, "POST", "/teams", json={"name": "NPI", "initial_manager_person_id": str(asha.id), "reason": "  ", "standup_channel_id": "C0NPI"}
     )
     assert res.status_code == 422
     assert res.json()["detail"]["code"] == "reason_required"
@@ -24,7 +24,7 @@ def test_team_name_is_unique_ignoring_case(directory, admin):
     make_team(directory, admin, "NPI", directory.person("Asha"))
     res = directory.call(
         admin, "POST", "/teams",
-        json={"name": "npi", "initial_manager_person_id": str(directory.person("Ravi").id), "reason": "x"},
+        json={"name": "npi", "initial_manager_person_id": str(directory.person("Ravi").id), "reason": "x", "standup_channel_id": "C0NPI"},
     )
     assert res.status_code == 409
     assert res.json()["detail"]["code"] == "team_name_taken"
@@ -34,7 +34,7 @@ def test_person_on_another_team_cannot_start_a_team(directory, admin):
     asha = directory.person("Asha")
     make_team(directory, admin, "NPI", asha)
     res = directory.call(
-        admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(asha.id), "reason": "x"}
+        admin, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(asha.id), "reason": "x", "standup_channel_id": "C0QA"}
     )
     assert res.status_code == 409
     assert res.json()["detail"]["code"] == "already_manager"

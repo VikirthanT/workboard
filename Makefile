@@ -20,7 +20,7 @@ PEOPLE_PATH = f="$${PEOPLE_FILE:-seed/people.json}"; [ ! -d "$$f" ] || f="$$f/pe
 NO_PEOPLE = echo "NOTE: $$f not found, so no people were loaded. Set PEOPLE_FILE in .env (see .env.example), or make the file with seed/csv_to_people.py."
 
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
-        server-install db-up db-down db-migrate db-seed db-demo db-demo-reset db-demo-remove api-dev server-test server-cov e2e \
+        server-install db-up db-down db-migrate db-seed db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev server-test server-cov e2e \
         prod-up prod-backup prod-load-people prod-down prod-logs
 
 help:
@@ -35,6 +35,7 @@ help:
 	@echo "make db-migrate      apply the Alembic migrations"
 	@echo "make db-seed         load PEOPLE_FILE (default seed/people.json) + bootstrap admins into the database (skipped with a note if missing)"
 	@echo "make db-demo         load the demo world: Admin, Manager 1, Manager 2, two teams, 14 tasks (dev only)"
+	@echo "make db-demo-standup write a made-up standup database for a team in the dev database (default NPI) to try Suggestions"
 	@echo "make db-demo-reset   remove the demo data and load it again"
 	@echo "make db-demo-remove  remove the demo data only (make dev-down keeps it; docker compose -f docker-compose.dev.yml down -v wipes the whole dev database)"
 	@echo "make api-dev         run the API on :8000 with the dev sign-in stub (DEV_AUTH=true, local only)"
@@ -43,7 +44,8 @@ help:
 	@echo "make e2e             Playwright smoke tests in a browser, on a throwaway database with the demo world (not part of make test)"
 	@echo ""
 	@echo "Production (docker-compose.yml: database + API; no seeds, no dev sign-in):"
-	@echo "make prod-up    build and start the stack (migrations run on start), then load PEOPLE_FILE if it exists"
+	@echo "make prod-up    build and start the stack (database, API, Slack listener, frontend, nginx; migrations run on start), then load PEOPLE_FILE if it exists"
+	@echo "make slack-dev  run the Slack listener (DM buttons) beside make api-dev; make dev starts it too"
 	@echo "make prod-load-people  just the people load, against the running prod stack"
 	@echo "make prod-down  stop it (data kept)"
 	@echo "make prod-logs  follow the logs"
@@ -62,7 +64,7 @@ install:
 # API's, the database's and Vite's logs together in this terminal. Ctrl-C stops the servers and the log tail
 # (the database container keeps running; `make dev-down` stops it).
 dev: server/.venv/bin/uvicorn db-up db-migrate db-seed db-demo
-	$(MAKE) -j3 api-dev web-dev db-logs
+	$(MAKE) -j4 api-dev web-dev db-logs slack-dev
 
 # Follows the dev database's log, starting from its last few lines.
 db-logs:
@@ -114,6 +116,11 @@ db-seed:
 db-demo:
 	@$(LOAD_ENV) DEV_AUTH=true server/.venv/bin/python seed/demo_db.py
 
+# A made-up standup database for a team already in the dev database (default NPI), to try Suggestions end to end.
+# `make db-demo-standup ARGS="--team Validation"` for another team. Prints the STANDUP_DB_URL line for your .env.
+db-demo-standup:
+	@$(LOAD_ENV) DEV_AUTH=true server/.venv/bin/python seed/demo_standup_db.py $(ARGS)
+
 db-demo-reset:
 	@$(LOAD_ENV) DEV_AUTH=true server/.venv/bin/python seed/demo_db.py --reset
 
@@ -121,8 +128,15 @@ db-demo-remove:
 	@$(LOAD_ENV) DEV_AUTH=true server/.venv/bin/python seed/demo_db.py --remove
 
 # DEV_AUTH=true is for local development only; without it the API answers 501 until Google sign-in exists.
+# The Slack listener: receives the DM button presses over Socket Mode. Needs SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env;
+# without them it prints a note and exits, so `make dev` carries on without it. Restart it to pick up code changes.
+slack-dev:
+	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/python -m slack.listener
+
+# `make api-dev API_PORT=8001` runs a second API beside the one on :8000 (for example to try new .env settings without stopping it).
+API_PORT ?= 8000
 api-dev:
-	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/uvicorn main:app --reload --port 8000
+	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/uvicorn main:app --reload --port $(API_PORT)
 
 server-test:
 	@$(LOAD_ENV) python3 scripts/test_all.py server

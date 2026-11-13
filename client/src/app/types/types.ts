@@ -142,6 +142,8 @@ export interface TaskReason {
 
 export interface Task {
   id: string;
+  /** The short id people can say aloud, shown as #<number> ("task #12") when a task is opened, and in Slack. One counter for every task. */
+  number: number;
   title: string;
   description: string;
   status: Status;
@@ -319,6 +321,78 @@ export interface TeamRecord {
   name: string;
   manager: PersonSummary | null;
   memberCount: number;
+  /** The standup channel the team's suggestions are read from; null until an admin sets one. */
+  standupChannelId: string | null;
+}
+
+export type SuggestionState = 'pending' | 'approved' | 'rejected';
+export type SuggestionKind = 'blocker' | 'deadline' | 'handover' | 'carry_over' | 'new';
+
+/** A task proposed from someone's standup. Not on any board until the manager adds it. */
+export interface Suggestion {
+  id: string;
+  personId: string;
+  title: string;
+  description: string;
+  kind: SuggestionKind;
+  priority: Priority;
+  startAt: string | null;
+  dueAt: string | null;
+  /** True when the standup stated no date and `dueAt` is the Friday default; editing the date makes it the manager's own. */
+  dueIsDefault: boolean;
+  subtasks: string[];
+  /** The exact line of the standup this came from. */
+  evidenceQuote: string;
+  /** The title of a tracked task this is a new obstacle to, or null. */
+  relatedTo: string | null;
+  state: SuggestionState;
+  lateReply: boolean;
+  standupDate: string;
+  /** The task it became, once added. */
+  taskId: string | null;
+}
+
+/** What a person posted: three sections when they used them, otherwise `message` holds the whole post. */
+export interface StandupPost {
+  date: string;
+  /** When they actually posted (an ISO time); the page shows this day, not the standup's date. Null if the standup app gave none. */
+  postedAt: string | null;
+  lateReply: boolean;
+  lastWeek: string | null;
+  thisWeek: string | null;
+  blockers: string | null;
+  message: string | null;
+}
+
+export interface PersonSuggestions {
+  person: { id: string; displayName: string; email: string; role: TeamRole };
+  /** Null when they posted nothing recently. */
+  standup: StandupPost | null;
+  suggestions: Suggestion[];
+}
+
+export interface SuggestionsPage {
+  standupChannelId: string | null;
+  lastSyncedAt: string | null;
+  /** Why the standup posts could not be shown (the suggestions still are); null when they were read. */
+  standupProblem: 'not_configured' | 'unreadable' | 'channel_empty' | null;
+  people: PersonSuggestions[];
+}
+
+/** The fields a manager can change on a pending suggestion; a date may be null to clear it. */
+export interface SuggestionPatch {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  personId?: string;
+  startAt?: string | null;
+  dueAt?: string | null;
+}
+
+/** A channel in the standup app: `id` is what a team stores. */
+export interface StandupChannel {
+  id: string;
+  name: string;
 }
 
 export type TeamRole = 'member' | 'manager';

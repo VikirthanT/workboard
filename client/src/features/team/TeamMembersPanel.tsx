@@ -31,6 +31,7 @@ export function TeamMembersPanel({ team }: { team: { id: string; name: string } 
     name: team.name,
     manager: manager ? { id: manager.id, displayName: manager.displayName, email: manager.email, active: manager.active } : null,
     memberCount: all.length,
+    standupChannelId: null, // only the admin's portal shows or edits it
   };
 
   return (

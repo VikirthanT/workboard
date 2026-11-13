@@ -125,7 +125,7 @@ def load_demo(db: Session, today: date | None = None) -> str:
     team_ids = {}
     for key, name, manager, people in TEAMS:
         team_ids[key] = uuid.uuid4()
-        teams.create_team(db, admin, team_ids[key], name, ids[manager], "Demo data")
+        teams.create_team(db, admin, team_ids[key], name, ids[manager], "Demo data", f"C0DEMO{key.upper()}")
         for person in people:
             members.add_member(db, admin, team_ids[key], ids[person], None)
     for key in LEFT:

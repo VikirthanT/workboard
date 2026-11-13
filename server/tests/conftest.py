@@ -33,6 +33,9 @@ time.tzset()
 for _name in (
     "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "SECRET_KEY", "TOKEN_TTL_SECONDS",
     "ALLOWED_EMAIL_DOMAIN", "BOOTSTRAP_ADMIN_EMAILS",
+    "STANDUP_DB_URL", "LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL",
+    # Never let a test see the real Slack tokens: it could post to a real channel.
+    "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
 ):
     os.environ.pop(_name, None)
 
@@ -128,7 +131,7 @@ def admin(directory):
 def make_team(directory, admin, name: str, manager: Person) -> dict:
     res = directory.call(
         admin, "POST", "/teams",
-        json={"name": name, "initial_manager_person_id": str(manager.id), "reason": "set up"},
+        json={"name": name, "initial_manager_person_id": str(manager.id), "reason": "set up", "standup_channel_id": "C0TEST"},
     )
     assert res.status_code == 201, res.text
     return res.json()
