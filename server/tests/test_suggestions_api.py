@@ -230,6 +230,41 @@ def test_bad_requests_are_422(world):
     assert call(world, world["asha"], "PATCH", f"/suggestions/{uuid.uuid4()}", json={}).status_code == 404
 
 
+def test_a_person_can_sync_three_times_a_minute_and_the_fourth_is_a_429_that_costs_the_rest_nothing(world):
+    from security import rate_limit
+
+    assert rate_limit.SYNC_PER_MINUTE == 3  # the model costs money: three a minute, whole team or one person at a time
+    team_id = world["team"]["id"]
+    sync_path = f"/teams/{team_id}/suggestions/sync"
+
+    codes = [call(world, world["asha"], "POST", sync_path).status_code for _ in range(4)]
+
+    assert codes == [200, 200, 200, 429]
+    assert call(world, world["asha"], "GET", f"/teams/{team_id}/suggestions").status_code == 200  # reading the page is not a sync
+    assert call(world, world["admin"], "POST", sync_path).status_code == 200  # an admin has a budget of their own
+
+
+def test_syncing_one_person_at_a_time_uses_the_same_budget(world):
+    team_id = world["team"]["id"]
+
+    codes = [call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id={p}").status_code
+             for p in (world["asha"].id, world["ravi"].id, world["asha"].id, world["ravi"].id)]
+
+    assert codes == [200, 200, 200, 429]
+
+
+def test_the_scheduled_sync_is_not_counted_against_anyones_budget(world, db):
+    from security import rate_limit
+
+    rate_limit.check(("sync", world["asha"].id), 3, 60)
+    rate_limit.check(("sync", world["asha"].id), 3, 60)
+    rate_limit.check(("sync", world["asha"].id), 3, 60)  # Asha's budget is spent
+
+    sync.sync_team_scheduled(db, uuid.UUID(world["team"]["id"]))  # the server's own run has no person and no limit
+
+    assert call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/sync").status_code == 429
+
+
 def test_an_admin_sync_stores_suggestions_for_the_manager_but_creates_no_task(world, db):
     team_id = world["team"]["id"]
 

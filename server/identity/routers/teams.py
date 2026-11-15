@@ -17,6 +17,7 @@ from database.config import get_db
 from identity import schemas
 from identity.services import channel_members, members, teams
 from models import Person, Team
+from security import rate_limit
 from security.authentication import get_current_person
 
 router = APIRouter(prefix="/teams", tags=["teams"])
@@ -162,6 +163,7 @@ def list_channel_members(
     Errors: 409 `standup_channel_not_set` (no channel on the team), `bot_not_in_channel`; 404 `channel_not_found` (Slack
     cannot find it, or it is private and the bot is not in it); 501 `slack_not_configured`; 502 `slack_failed`.
     """
+    rate_limit.check(("slack-read", actor.id), rate_limit.SLACK_READ_PER_MINUTE, 60)  # it asks Slack: twenty a minute
     found = channel_members.list_channel_members(db, actor, team_id)
     return schemas.ChannelMembersResponse(
         channel_id=found.channel_id,

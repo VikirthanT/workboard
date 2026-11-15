@@ -15,6 +15,7 @@ from models import Person, TaskSuggestion
 from standups import schemas
 from standups.services import queries, suggestions as commands, sync
 from standups.standup_db.reader import Submission
+from security import rate_limit
 from security.authentication import get_current_person
 from slack import messages
 from slack.services import announce
@@ -97,6 +98,7 @@ def sync_suggestions(
     501 `standups_not_configured` or `llm_not_configured`; 502 `llm_failed` (nothing from the failed post is kept,
     earlier ones are).
     """
+    rate_limit.check(("sync", actor.id), rate_limit.SYNC_PER_MINUTE, 60)  # it runs the language model: three a minute
     sync.sync_team(db, actor, team_id, person_id)
     return _page(db, actor, team_id)
 

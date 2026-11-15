@@ -88,6 +88,18 @@ def test_the_page_says_why_when_the_channel_cannot_be_read(world, db, monkeypatc
     assert (res.status_code, res.json()["detail"]["code"]) == (409, "standup_channel_not_set")
 
 
+def test_asking_slack_for_a_channels_members_is_limited_to_twenty_a_minute(world):
+    from security import rate_limit
+
+    assert rate_limit.SLACK_READ_PER_MINUTE == 20
+
+    codes = [pull(world, world["asha"]).status_code for _ in range(21)]
+
+    assert codes == [200] * 20 + [429]
+    assert pull(world, world["admin"]).status_code == 200  # another person has their own budget
+    assert world["d"].call(world["asha"], "GET", "/me").status_code == 200  # and the rest of the API is not affected
+
+
 def test_the_ticked_people_are_added_together_and_each_is_audited(world, db):
     res = add(world, world["asha"], ["meena", "omar"], reason="from the channel")
 

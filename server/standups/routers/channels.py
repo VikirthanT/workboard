@@ -3,6 +3,7 @@ Errors come back as {"detail": {"code", "message"}}; the codes are listed in `st
 from fastapi import APIRouter, Depends, Path
 
 from models import Person
+from security import rate_limit
 from security.authentication import get_current_person
 from standups import schemas
 from standups.services import channels
@@ -31,4 +32,5 @@ def channel_name(
     Errors: 404 `channel_not_found` (Slack cannot find it, or it is private and the bot is not in it); 409 `bot_not_in_channel`;
     501 `slack_not_configured`; 502 `slack_failed`; 422 for an id that is not letters and digits.
     """
+    rate_limit.check(("slack-read", actor.id), rate_limit.SLACK_READ_PER_MINUTE, 60)  # it may ask Slack: twenty a minute, shared with the members read
     return schemas.ChannelNameResponse(id=channel_id, name=channels.channel_name(actor, channel_id))

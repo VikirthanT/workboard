@@ -60,6 +60,15 @@ def test_an_unreadable_standup_database_falls_back_to_slack(world, monkeypatch):
     assert lookup(world, world["asha"]).json()["name"] == "npi-standup"
 
 
+def test_channel_name_lookups_share_the_twenty_a_minute_budget_for_asking_slack(world):
+    from security import rate_limit
+
+    codes = [lookup(world, world["asha"]).status_code for _ in range(rate_limit.SLACK_READ_PER_MINUTE + 1)]
+
+    assert codes == [200] * rate_limit.SLACK_READ_PER_MINUTE + [429]
+    assert lookup(world, world["admin"]).status_code == 200
+
+
 def test_nobody_else_may_ask(world):
     assert lookup(world, None).status_code == 401
     assert lookup(world, world["ravi"]).status_code == 403  # a plain member

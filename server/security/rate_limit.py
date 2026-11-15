@@ -17,6 +17,8 @@ from core.exceptions import AppError
 
 API_PER_MINUTE = 300  # every request by one signed-in person
 IMPORT_PER_MINUTE = 6  # the bulk upload: it parses a spreadsheet, so it is the costly call
+SYNC_PER_MINUTE = 3  # a standups sync, whole team or one person: it runs the language model, which costs money (the scheduler is not limited)
+SLACK_READ_PER_MINUTE = 20  # a call that asks Slack something (a channel's members, a channel's name)
 LOGIN_ATTEMPTS = 10  # Google sign-ins for one email in LOGIN_WINDOW_SECONDS, successful or refused
 LOGIN_WINDOW_SECONDS = 600
 
