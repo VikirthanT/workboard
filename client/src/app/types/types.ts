@@ -368,7 +368,7 @@ export interface StandupPost {
 
 export interface PersonSuggestions {
   person: { id: string; displayName: string; email: string; role: TeamRole };
-  /** Null when they posted nothing recently. */
+  /** Null when they posted nothing this week (the standups of earlier weeks are not read). */
   standup: StandupPost | null;
   suggestions: Suggestion[];
 }

@@ -23,7 +23,7 @@ from standups.llm import extract, prompt
 from standups.services import suggestions as suggestions_service
 from standups.services.matching import person_matcher
 from standups.standup_db import reader
-from standups.states import SYNC_DAYS
+from standups.states import week_start
 
 STATUS_LABEL = {"todo": "To Do", "in_progress": "In Progress", "blocked": "Blocked", "review": "Review"}
 
@@ -53,7 +53,7 @@ def _sync(db: Session, team: Team, person_id: uuid.UUID | None) -> None:
     suggestions_service.expire(db, team.id)
     match = person_matcher(members)
 
-    for sub in reader.list_submissions(team.standup_channel_id, today - timedelta(days=SYNC_DAYS)):
+    for sub in reader.list_submissions(team.standup_channel_id, week_start(today)):  # this week's standups only
         person = match(sub)
         if person is None or (person_id is not None and person.id != person_id):
             continue

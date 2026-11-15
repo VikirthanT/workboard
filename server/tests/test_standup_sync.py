@@ -12,6 +12,7 @@ from models import Person, StandupRead, Task, TaskSuggestion, Team
 from standups.llm import extract, prompt
 from standups.services import sync
 from standups.standup_db import reader
+from standups.states import week_start
 from tests.conftest import make_team
 
 TODAY = date.today()
@@ -60,6 +61,31 @@ def world(directory, admin, monkeypatch):
     monkeypatch.setattr(extract, "complete_json", complete_json)
     monkeypatch.setattr(settings, "llm_model", "test-model")
     return {"asha": asha, "ravi": ravi, "team": team, "admin": admin, "directory": directory, **state}
+
+
+@pytest.mark.parametrize("day, monday", [
+    (date(2026, 11, 16), date(2026, 11, 16)),  # a Monday is its own week's start
+    (date(2026, 11, 17), date(2026, 11, 16)),  # Tuesday: the sync day
+    (date(2026, 11, 18), date(2026, 11, 16)),  # Wednesday: the late-posts run
+    (date(2026, 11, 22), date(2026, 11, 16)),  # Sunday still belongs to that week
+    (date(2026, 11, 23), date(2026, 11, 23)),  # the next Monday starts a new week
+])
+def test_the_week_starts_on_monday(day, monday):
+    assert week_start(day) == monday
+
+
+def test_a_sync_asks_only_for_this_weeks_standups(world):
+    run(world)
+
+    [(channel, since)] = world["channels"]
+    assert channel == "C0TEST"  # the channel make_team gives every team
+    assert since == week_start(TODAY) and since.weekday() == 0  # this week's Monday, not fourteen days back
+
+
+def test_a_scheduled_sync_asks_only_for_this_weeks_standups_too(db, world):
+    sync.sync_team_scheduled(db, uuid.UUID(world["team"]["id"]))
+
+    assert [since for _, since in world["channels"]] == [week_start(TODAY)]
 
 
 def run(world, actor=None):

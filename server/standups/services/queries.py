@@ -18,7 +18,7 @@ from models import ROLE_MANAGER, Person, Team, TaskSuggestion
 from security.authorization import require_view_team
 from standups.services.matching import person_matcher
 from standups.standup_db import reader
-from standups.states import KEEP_DAYS, SYNC_DAYS
+from standups.states import KEEP_DAYS, week_start
 
 
 @dataclass
@@ -40,7 +40,7 @@ class TeamPage:
 
 def list_for_team(db: Session, actor: Person, team_id: uuid.UUID) -> TeamPage:
     """One entry per person on the team, manager first. `standup` is that person's latest submission in the team's
-    channel within the sync window, or None when they posted nothing (or the posts could not be read, see
+    channel from this week (an earlier week's standup is not shown), or None when they posted nothing this week (or the posts could not be read, see
     `standup_problem`). The standup blocks come straight from the standup database, so they do not depend on the
     language model: a failed or unset-up sync still leaves them."""
     team = get_team(db, team_id)
@@ -89,7 +89,7 @@ def _recent_submissions(channel_id: str | None) -> tuple[list[reader.Submission]
     if not channel_id:
         return [], None
     try:
-        submissions = reader.list_submissions(channel_id, date.today() - timedelta(days=SYNC_DAYS))
+        submissions = reader.list_submissions(channel_id, week_start(date.today()))  # this week's standups only
         # Nothing at all in this channel: usually the team's channel is not the one the standup app uses.
         return submissions, (None if submissions else "channel_empty")
     except AppError as err:

@@ -122,8 +122,8 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
 
       {standupProblem === 'channel_empty' && (
         <Alert variant="info" title="No standup posts found in this team’s channel">
-          Nothing was posted in the last two weeks in the channel set for this team ({standupChannelId}). If people did post, the channel
-          may not be the one the standup app uses: ask an admin to check it.
+          Nothing has been posted this week in the channel set for this team ({standupChannelId}). Early in the week that is normal. If
+          people did post, the channel may not be the one the standup app uses: ask an admin to check it.
         </Alert>
       )}
       {(standupProblem === 'not_configured' || standupProblem === 'unreadable') && (

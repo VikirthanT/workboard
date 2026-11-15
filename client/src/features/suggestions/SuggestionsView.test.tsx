@@ -133,7 +133,7 @@ describe('SuggestionsView', () => {
     render(<SuggestionsView />);
     expect(screen.getByText('The standup posts cannot be shown')).toBeInTheDocument();
     expect(screen.getByText(/standup database is not set up on this server/)).toBeInTheDocument();
-    expect(screen.queryByText('No standup posted recently.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No standup posted this week.')).not.toBeInTheDocument();
     expect(screen.getByText('Design weld jig')).toBeInTheDocument(); // the suggestions we already hold are still there
   });
 
@@ -142,7 +142,7 @@ describe('SuggestionsView', () => {
     render(<SuggestionsView />);
     expect(screen.getByText('No standup posts found in this team’s channel')).toBeInTheDocument();
     expect(screen.getByText(/C0WRONG/)).toBeInTheDocument();
-    expect(screen.getAllByText('No standup posted recently.').length).toBeGreaterThan(0); // each person still says so
+    expect(screen.getAllByText('No standup posted this week.').length).toBeGreaterThan(0); // each person still says so
   });
 
   it('shows the error when the page cannot load', () => {
@@ -179,7 +179,7 @@ describe('SuggestionsView', () => {
     expect(screen.getByText('Review the test plan')).toBeInTheDocument();
     expect(screen.getByText('No suggestions for Asha.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Divya/ }));
-    expect(screen.getByText('No standup posted recently.')).toBeInTheDocument();
+    expect(screen.getByText('No standup posted this week.')).toBeInTheDocument();
   });
 
   it('shows each card with its description, quote and default due date, and what state it is in', () => {

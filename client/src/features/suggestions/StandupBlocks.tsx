@@ -21,7 +21,7 @@ export function StandupBlocks({ post, unavailable = false }: { post: StandupPost
   if (!post) {
     return (
       <div className="rounded-lg border border-line bg-surface px-3.5 py-3">
-        <p className="text-sm text-ink-subtle">No standup posted recently.</p>
+        <p className="text-sm text-ink-subtle">No standup posted this week.</p>
       </div>
     );
   }
