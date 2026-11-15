@@ -11,7 +11,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def logout(
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """End every session this person has, on every browser: the tokens already issued stop working at once.
 
     Who: any signed-in person. Returns 204. A token that is already dead gets the usual 401, which is fine: it is

@@ -50,7 +50,11 @@ def create_task(
 
 
 @router.get("/{task_id}", response_model=schemas.TaskDetail)
-def task_detail(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def task_detail(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """One task with its full timeline (oldest first): creation, status moves, edits, reassignments, comments.
 
     Who: the manager of the task's team, or any admin (read-only). Anyone else gets 403 `forbidden`.
@@ -82,7 +86,11 @@ def update_task(
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def delete_task(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Delete a task and its timeline for good.
 
     Who: the manager of the task's team.

@@ -24,7 +24,10 @@ MULTIPART_OVERHEAD_BYTES = 64 * 1024  # boundaries and headers around the file i
 
 
 @router.get("/template")
-def download_template(db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def download_template(
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """The .xlsx to fill in, with dropdowns of your team and the directory, built fresh on every download.
 
     Who: the manager of a team (403 `forbidden` for anyone else).
