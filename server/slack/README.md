@@ -41,6 +41,9 @@ Commands change something and return nothing, or a problem message to show to th
 | --- | --- | --- |
 | `outbox.record_task_added` | `outbox.py` | Queues "this task was added" for the next channel announcement. Called inside the task command's transaction. |
 | `dm.record_dm` | `dm.py` | Queues the assignee's DM card. Called by the task commands before they commit. |
+| `dm.record_reassignment` | `dm.py` | When a task moves to someone else: marks the current card replaced (a card never sent is dropped) and queues a new live card for the new assignee, remembering who reassigned it. One live card per task (a unique index on the rows not yet replaced). Called by `update_task` before it commits. |
+| `dm.after_reassign` | `dm.py` | After the reply to a reassignment: sends the new card, then posts the hand-over under it, closes the old card (`dm.close_replaced`) and redraws both people's Home tabs. Never raises. |
+| `dm.close_replaced` | `dm.py` | Redraws the card of the assignee the task just left: its title, "Reassigned to <name>", no buttons. Only the newest replaced card, so an earlier one keeps naming the person it went to. |
 | `announce.flush_team` | `announce.py` | After the board request is answered: sends the channel announcement with the PDF, then the queued DM cards. A failed row is marked and can be retried. |
 | `dm.send_pending` | `dm.py` | Opens each assignee's DM, posts the card, stores its `ts` so the thread can be found. |
 | `dm.refresh_card` | `dm.py` | Redraws the card (buttons and status) after a change from either side. |
@@ -74,6 +77,10 @@ server/slack/
     ├── interactions.py  what a button press does
     └── outbox.py     the queue of announcements
 ```
+
+## When a task is reassigned
+
+The new assignee gets their own DM card (the assignee's buttons: status dropdown and Comment), and the first message under it reads "<manager> reassigned this task to you." followed by the latest 10 comments, moves and reassignments already on the task, oldest first, as quotes with who said them (you, manager, admin, or previous assignee) and when, and a line saying how many earlier ones are not shown. The old assignee's card is closed: the title, "Reassigned to <name>", no buttons, so they cannot move it from there (the server also refuses). Anything said afterwards, from the board or from Slack, goes under the new card. Both people's Home tabs are redrawn. If the new assignee has no real Slack id nothing is sent to them (the old card is still closed); if Slack refuses the card it is tried again like any other, and the hand-over follows it. The earlier thread itself is not copied: its content is on the task's timeline, and the hand-over is a summary of that.
 
 ## Not done or not checked
 

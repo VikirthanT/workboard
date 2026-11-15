@@ -87,7 +87,7 @@ Shared code used here, kept outside the feature: `server/models/` (tables), `ser
 ## Not built yet
 
 - Google sign-in (last): `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/google/exchange?code=`, a new `server/auth/` feature; planned in `docs/DEPLOYMENT.md` and `docs/WORKLOG.md` (step 9).
-- Reassigning a task does not send the new assignee a Slack DM card (a task has one card, and it stays with the first assignee).
+- (Reassigning a task now sends the new assignee a Slack DM card with the earlier thread under it; see `server/slack/README.md`.)
 
 Tasks are built (`server/tasks/README.md`): a removed person's open tasks show as "needs a new owner", and a deleted team takes its tasks with it.
 
