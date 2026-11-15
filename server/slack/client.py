@@ -81,6 +81,26 @@ def channel_member_ids(token: str, channel: str) -> list[str]:
     return ids
 
 
+USERS_PAGE = 200  # Slack's advised page size for the workspace list
+USERS_MAX_PAGES = 100  # 20,000 people: far more than ATI has, and a stop if Slack kept sending cursors
+
+
+def list_users(token: str) -> list[dict]:
+    """Everyone in the workspace (users.list), following Slack's pages: bots, deactivated people and guests too, so the
+    caller decides who counts. A list that could not be read to the end is an error, never a short list: the caller marks
+    people missing from it as having left."""
+    members: list[dict] = []
+    cursor = ""
+    for _ in range(USERS_MAX_PAGES):
+        data = {"limit": USERS_PAGE, **({"cursor": cursor} if cursor else {})}
+        body = _call(token, "users.list", data=data)  # a read method: Slack wants a form body, not JSON
+        members += [m for m in body.get("members", []) if isinstance(m, dict)]
+        cursor = (body.get("response_metadata") or {}).get("next_cursor") or ""
+        if not cursor:
+            return members
+    raise SlackError(f"Slack kept sending pages after {USERS_MAX_PAGES}, so the list was not used.")
+
+
 def channel_name(token: str, channel: str) -> str:
     """The channel's name as Slack shows it, without the #. Raises SlackError with Slack's own code (`channel_not_found`, ...)."""
     return _call(token, "conversations.info", data={"channel": channel})["channel"]["name"]

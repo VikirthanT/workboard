@@ -118,6 +118,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # The weekly people sync: refreshes the people directory from the Slack workspace at the times in DIRECTORY_SYNC_SCHEDULE
+  # (India time, for example "sun 22:00") and makes the BOOTSTRAP_ADMIN_EMAILS people admin. The API's own image with a
+  # different command. With no schedule it says so and stays up idle; `make prod-up` also runs it once, by hand, on start.
+  # Needs the bot token (users:read, users:read.email), not the app token. Every run is written to the audit log.
+  directory-sync:
+    image: workboard-server
+    container_name: workboard-directory-sync
+    command: ["python", "-m", "identity.directory_scheduler"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-workboard}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-workboard}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-atimotors.com}
+      BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
+      DEV_AUTH: "false"
+      DIRECTORY_SYNC_SCHEDULE: ${DIRECTORY_SYNC_SCHEDULE:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
   # The built React app, served as plain files. Not published: only nginx reaches it.
   frontend:
     image: workboard-client

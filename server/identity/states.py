@@ -7,6 +7,7 @@ MEMBER_ADD = "member.add"
 MEMBER_REMOVE = "member.remove"
 ADMIN_GRANT = "admin.grant"
 ADMIN_REVOKE = "admin.revoke"
+DIRECTORY_SYNC = "directory.sync"  # one run of the people sync from Slack; the counts are in the entry's details
 # Written by the tasks feature into the same append-only log. A deleted task takes its own timeline with it, so the
 # delete entry carries a snapshot of the task and that timeline in `details`.
 TASK_DELETE = "task.delete"

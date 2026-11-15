@@ -27,8 +27,8 @@ def test_production_api_is_hardened():
 
 def test_every_production_service_drops_all_capabilities_and_cannot_gain_privileges():
     compose = (ROOT / "docker-compose.yml").read_text()
-    services = re.findall(r"^  (\w+):\n(.*?)(?=^  \w|^volumes:)", compose, re.S | re.M)
-    assert {name for name, _ in services} == {"db", "server", "slack", "scheduler", "frontend", "nginx"}  # a new service must be added here
+    services = re.findall(r"^  ([\w-]+):\n(.*?)(?=^  \w|^volumes:)", compose, re.S | re.M)  # names can have a hyphen (directory-sync)
+    assert {name for name, _ in services} == {"db", "server", "slack", "scheduler", "directory-sync", "frontend", "nginx"}  # a new service must be added here
     for name, body in services:
         assert "cap_drop: [ALL]" in body, f"{name} keeps Linux capabilities it does not need"
         assert "no-new-privileges:true" in body, f"{name} can gain privileges"
@@ -42,6 +42,16 @@ def test_every_production_service_drops_all_capabilities_and_cannot_gain_privile
 def _service(name: str) -> str:
     compose = (ROOT / "docker-compose.yml").read_text()
     return re.search(rf"^  {name}:\n(.*?)(?=^  \w|^volumes:)", compose, re.S | re.M).group(1)
+
+
+def test_make_prod_up_starts_the_weekly_people_sync_with_the_apis_image_the_schedule_and_the_bot_token_only():
+    sync = _service("directory-sync")
+    assert "image: workboard-server" in sync and 'command: ["python", "-m", "identity.directory_scheduler"]' in sync
+    assert 'DEV_AUTH: "false"' in sync and not re.search(r"^\s*env_file:", sync, re.M)
+    for setting in ("DIRECTORY_SYNC_SCHEDULE", "SLACK_BOT_TOKEN", "BOOTSTRAP_ADMIN_EMAILS"):
+        assert f"{setting}: ${{{setting}:-}}" in sync, f"the people sync is not given {setting}"
+    assert "SLACK_APP_TOKEN" not in sync  # it never listens to Slack, so it never sees the app token
+    assert "LLM_" not in sync and "STANDUP_" not in sync  # nothing from the standup side
 
 
 def test_make_prod_up_starts_the_standup_scheduler_with_the_apis_image_and_the_schedule_but_no_slack_tokens():

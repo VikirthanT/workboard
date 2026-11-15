@@ -13,27 +13,21 @@ LOAD_ENV = $(LOAD_DOTENV) \
 
 DEV_COMPOSE = docker compose -f docker-compose.dev.yml
 
-# The people directory loaded into the database (dev and prod): PEOPLE_FILE from .env, default seed/people.json.
-# It can be a file, or a folder that holds people.json. Put it after LOAD_DOTENV; it sets $$f.
-# Missing is fine: the load is skipped with a note.
-PEOPLE_PATH = f="$${PEOPLE_FILE:-seed/people.json}"; [ ! -d "$$f" ] || f="$$f/people.json";
-NO_PEOPLE = echo "NOTE: $$f not found, so no people were loaded. Set PEOPLE_FILE in .env (see .env.example), or make the file with seed/csv_to_people.py."
-
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
-        server-install db-up db-down db-migrate db-seed db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev scheduler-dev server-test server-cov e2e \
-        prod-up prod-backup prod-load-people prod-down prod-logs
+        server-install db-up db-down db-migrate db-sync-people db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev scheduler-dev server-test server-cov e2e \
+        prod-up prod-backup prod-sync-people prod-down prod-logs
 
 help:
 	@echo "make install    install frontend dependencies"
 	@echo ""
 	@echo "Development (loads .env):"
-	@echo "make dev        database + migrations + people + demo accounts + API on :8000 (DEV_AUTH=true) + Vite on :5173, with the API, database and Vite logs in one terminal"
+	@echo "make dev        database + migrations + demo accounts + API on :8000 (DEV_AUTH=true) + Vite on :5173, with the API, database and Vite logs in one terminal"
 	@echo "make db-logs    follow the dev database's log on its own"
 	@echo "make dev-down  stop the dev database (data kept)"
 	@echo "make server-install  create server/.venv and install the server dependencies"
 	@echo "make db-up           start only the dev Postgres container (127.0.0.1:5436)"
 	@echo "make db-migrate      apply the Alembic migrations"
-	@echo "make db-seed         load PEOPLE_FILE (default seed/people.json) + bootstrap admins into the database (skipped with a note if missing)"
+	@echo "make db-sync-people  load the people from the Slack workspace now (needs SLACK_BOT_TOKEN) and make the BOOTSTRAP_ADMIN_EMAILS admins; every run is audited"
 	@echo "make db-demo         load the demo world: Admin, Manager 1, Manager 2, two teams, 14 tasks (dev only)"
 	@echo "make db-demo-standup write a made-up standup database for a team in the dev database (default NPI) to try Suggestions"
 	@echo "make db-demo-reset   remove the demo data and load it again"
@@ -44,9 +38,9 @@ help:
 	@echo "make e2e             Playwright smoke tests in a browser, on a throwaway database with the demo world (not part of make test)"
 	@echo ""
 	@echo "Production (docker-compose.yml: database + API; no seeds, no dev sign-in):"
-	@echo "make prod-up    build and start the stack (database, API, Slack listener, frontend, nginx; migrations run on start), then load PEOPLE_FILE if it exists"
+	@echo "make prod-up    build and start the stack (database, API, Slack listener, standup scheduler, weekly people sync, frontend, nginx; migrations run on start), then sync the people from Slack once"
 	@echo "make slack-dev  run the Slack listener (DM buttons) beside make api-dev; make dev starts it too"
-	@echo "make prod-load-people  just the people load, against the running prod stack"
+	@echo "make prod-sync-people  just the people sync from Slack, once, against the running prod stack"
 	@echo "make prod-down  stop it (data kept)"
 	@echo "make prod-logs  follow the logs"
 	@echo ""
@@ -63,7 +57,7 @@ install:
 # The whole local stack: database, migrations, people, the API (dev sign-in on) and the Vite dev server, with the
 # API's, the database's and Vite's logs together in this terminal. Ctrl-C stops the servers and the log tail
 # (the database container keeps running; `make dev-down` stops it).
-dev: server/.venv/bin/uvicorn db-up db-migrate db-seed db-demo
+dev: server/.venv/bin/uvicorn db-up db-migrate db-demo
 	$(MAKE) -j4 api-dev web-dev db-logs slack-dev
 
 # Follows the dev database's log, starting from its last few lines.
@@ -108,8 +102,11 @@ db-down: dev-down
 db-migrate:
 	@$(LOAD_ENV) cd server && .venv/bin/alembic upgrade head
 
-db-seed:
-	@$(LOAD_ENV) $(PEOPLE_PATH) if [ -f "$$f" ]; then server/.venv/bin/python seed/load_db.py "$$f"; else $(NO_PEOPLE); fi
+# The people directory comes from the Slack workspace (users.list), not from a file. Needs SLACK_BOT_TOKEN in .env with the
+# users:read and users:read.email scopes; without it this says so and does nothing. Not part of make dev, which has its own
+# demo accounts: run it when you want the real directory in the dev database. `make db-sync-people ARGS=--allow-large-removal`.
+db-sync-people:
+	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata .venv/bin/python -m identity.directory_scheduler --once $(ARGS)
 
 # Development only: Admin, Manager 1 and Manager 2 with two teams and 14 tasks, so the login list has accounts to pick.
 # Skips if already loaded; `make db-demo-reset` loads it again. Never part of the production stack.
@@ -157,7 +154,7 @@ server-cov:
 # Production: no DEV_AUTH and no mock reach the containers (see docker-compose.yml).
 prod-up: prod-backup
 	docker compose up -d --build --wait
-	@$(MAKE) --no-print-directory prod-load-people
+	@$(MAKE) --no-print-directory prod-sync-people || echo "NOTE: the people sync did not run (see above); the stack is up. Run make prod-sync-people once Slack is set up."
 
 # Dump the running database to backups/ (private, gitignored) before anything is changed; keeps the newest 14.
 # On a first deploy there is no database yet, so it says so and skips. A failed dump stops prod-up.
@@ -172,14 +169,11 @@ prod-backup:
 		ls -1t backups/workboard-*.sql.gz | tail -n +15 | xargs -r rm -f; \
 	fi
 
-# One-off container: the loader and the people file are mounted read-only for this run, never baked into the image.
-prod-load-people:
-	@$(LOAD_ENV) $(PEOPLE_PATH) if [ -f "$$f" ]; then \
-		docker compose run --rm -T -e BOOTSTRAP_ADMIN_EMAILS \
-			-v "$(abspath seed/load_db.py):/app/load_db.py:ro" \
-			-v "$$(realpath "$$f"):/data/people.json:ro" \
-			server python load_db.py /data/people.json; \
-	else $(NO_PEOPLE); fi
+# One-off container from the API's own image: reads the Slack workspace once and loads the people, then makes the
+# BOOTSTRAP_ADMIN_EMAILS admins (how the first admin gets in). Safe to run again; `ARGS=--allow-large-removal` allows a run
+# that deactivates many people. Without SLACK_BOT_TOKEN it says so and does nothing.
+prod-sync-people:
+	@$(LOAD_ENV) docker compose run --rm -T -e BOOTSTRAP_ADMIN_EMAILS server python -m identity.directory_scheduler --once $(ARGS)
 
 prod-down:
 	docker compose down

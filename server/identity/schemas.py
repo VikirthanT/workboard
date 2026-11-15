@@ -34,6 +34,18 @@ class PersonResponse(BaseModel):
     open_task_count: int | None = None
 
 
+class DirectorySyncResponse(BaseModel):
+    """What one run of the people sync did, for the admin who pressed the button."""
+
+    people: int  # in the Slack workspace and listable
+    added: int
+    reactivated: int
+    deactivated: int
+    deactivated_on_a_team: int
+    new_admins: int
+    skipped: int
+
+
 class MembersAdd(BaseModel):
     """Several people onto one team in one go (the Slack channel review). All or none are added."""
 

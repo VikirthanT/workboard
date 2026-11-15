@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # (India) time; a day is mon..sun, weekdays or daily, and a time on its own means every day. Empty means never
     # automatically, only when a manager presses Sync.
     standup_sync_schedule: str = ""
+    # When the people directory is refreshed from the Slack workspace, same format (see identity/directory_scheduler.py), for
+    # example "sun 22:00". Empty means never automatically (`make prod-sync-people` runs it once).
+    directory_sync_schedule: str = ""
     llm_provider: str = ""
     llm_model: str = ""
     llm_api_key: str = ""
