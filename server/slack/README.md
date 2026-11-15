@@ -47,6 +47,7 @@ Commands change something and return nothing, or a problem message to show to th
 | `announce.flush_team` | `announce.py` | After the board request is answered: sends the channel announcement with the PDF, then the queued DM cards. A failed row is marked and can be retried. |
 | `dm.send_pending` | `dm.py` | Opens each assignee's DM, posts the card, stores its `ts` so the thread can be found. |
 | `dm.refresh_card` | `dm.py` | Redraws the card (buttons and status) after a change from either side. |
+| `dm.remove_after_delete` | `dm.py` | After a manager deletes a task: deletes every Slack message of the task (the replies under each card first, then the card, replaced cards too) with `client.delete_message` (`chat.delete`), then redraws the assignee's Home tab. A message already gone is fine; any other Slack failure is logged and the rest are still tried. Never raises. Its input comes from the query `dm.removal_plan`, run before the delete because the delete takes the DM rows with it. |
 | `dm.post_comment`, `dm.post_manager_comment`, `dm.post_move` | `dm.py` | Post a comment or a move in the card's thread with the side's bar; every posted `ts` is remembered so the whole thread can be removed a few days after Done. |
 | `interactions.move` | `interactions.py` | The assignee moves their task (up to Review) through the same task command the board uses; returns a problem text or `None`. |
 | `interactions.comment` | `interactions.py` | The assignee's comment through the same task command. |
@@ -58,8 +59,9 @@ Commands change something and return nothing, or a problem message to show to th
 | Function | File | What it returns |
 | --- | --- | --- |
 | `interactions.reason_view`, `comment_view`, `details_view` | `interactions.py` | The form or popup to open, or why it cannot be opened (not your task, task is Done, ...). Read the database and Slack nothing. |
-| `blocks.*` | `blocks.py` | Pure functions: task and person in, Slack blocks out. No database, no Slack. |
-| `client.*` | `client.py` | The thin Slack web API wrapper: `open_dm`, `post_message`, `update_message`, `publish_home`, `post_with_pdf`. Errors become `SlackError`. |
+| `dm.removal_plan` | `dm.py` | For a task about to be deleted: every Slack message it has as (channel, ts), replies before their card, and the assignee's Slack id. Reads the database only; must run before the delete. |
+| `blocks.*` | `blocks.py` | Pure functions: task and person in, Slack blocks out. No database, no Slack. The Home tab lists the 8 most recently completed tasks (`HOME_MAX_DONE`) read-only, below the open ones. |
+| `client.*` | `client.py` | The thin Slack web API wrapper: `open_dm`, `post_message`, `update_message`, `delete_message`, `publish_home`, `post_with_pdf`. Errors become `SlackError`. |
 
 ## Folder map
 

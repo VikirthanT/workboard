@@ -749,3 +749,81 @@ def test_the_handover_and_the_closed_card_read_well_with_and_without_history():
 
     closed_text, closed = blocks.reassigned_card(task, "Omar")
     assert control_ids(closed) == [] and "Task #7" in closed_text and "Reassigned to Omar" in message_text({"blocks": closed})
+
+
+@pytest.fixture
+def gone(monkeypatch):
+    """Records every message the bot is asked to delete, and every Home tab it redraws; `fail` makes the next delete refuse."""
+    state = {"deleted": [], "homes": [], "fail": []}
+
+    def delete_message(token, channel, ts):
+        if state["fail"]:
+            raise state["fail"].pop(0)
+        state["deleted"].append((channel, ts))
+
+    monkeypatch.setattr(client, "delete_message", delete_message)
+    monkeypatch.setattr(client, "publish_home", lambda token, user, view: state["homes"].append(user))
+    return state
+
+
+def delete_task(world, task_id, who=None):
+    return world["directory"].call(who or world["asha"], "DELETE", f"/tasks/{task_id}")
+
+
+def test_deleting_a_task_removes_its_card_and_the_replies_under_it_from_slack_and_redraws_the_home_tab(db, world, slack, gone):
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+    board_comment(world, task_id, world["asha"], "Please share the drawing.")  # a reply under the card
+    [card] = dms(db)
+    [reply] = db.scalars(select(SlackDmMessage.ts).where(SlackDmMessage.dm_id == card.id)).all()
+
+    assert delete_task(world, task_id).status_code == 204
+
+    assert gone["deleted"] == [(card.dm_channel, reply), (card.dm_channel, card.message_ts)]  # the reply first, then the card
+    assert gone["homes"] == ["U0RAVI1234"]  # the row leaves the assignee's Home tab at once
+
+
+def test_a_task_whose_card_was_never_sent_deletes_without_touching_slack(db, world, slack, gone):
+    slack["fail"] = SlackError("Slack could not be reached.")  # the card could not be sent when the task was made
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+    slack["fail"] = None
+
+    assert delete_task(world, task_id).status_code == 204
+
+    assert gone["deleted"] == []
+
+
+def test_a_slack_failure_never_breaks_the_delete_and_the_other_messages_are_still_removed(db, world, slack, gone):
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+    board_comment(world, task_id, world["asha"], "Please share the drawing.")
+    gone["fail"].append(SlackError("Slack refused it: ratelimited."))  # the first message cannot be deleted
+    [card] = dms(db)
+
+    assert delete_task(world, task_id).status_code == 204
+
+    assert db.get(Task, uuid.UUID(task_id)) is None
+    assert gone["deleted"] == [(card.dm_channel, card.message_ts)]  # the card still went
+
+
+def test_a_message_that_is_already_gone_from_slack_is_not_a_problem(db, world, slack, gone):
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+    gone["fail"].append(SlackError("Slack refused it: message_not_found."))
+
+    assert delete_task(world, task_id).status_code == 204
+    assert gone["homes"] == ["U0RAVI1234"]  # and the Home tab is still redrawn
+
+
+def test_a_delete_that_is_refused_removes_nothing_from_slack(db, world, slack, gone):
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+
+    refused = delete_task(world, task_id, who=world["ravi"])  # the assignee is not the manager
+
+    assert refused.status_code in (403, 404) and db.get(Task, uuid.UUID(task_id)) is not None
+    assert gone["deleted"] == [] and gone["homes"] == []
+
+
+def test_nothing_is_removed_from_slack_when_slack_is_not_set_up(db, world, slack, gone, monkeypatch):
+    task_id = create(world, "Design weld jig", world["ravi"]).json()["id"]
+    monkeypatch.setattr(settings, "slack_bot_token", "")
+
+    assert delete_task(world, task_id).status_code == 204
+    assert gone["deleted"] == []

@@ -96,6 +96,7 @@ def update_task(
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(
     task_id: uuid.UUID,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
@@ -103,9 +104,12 @@ def delete_task(
 
     Who: the manager of the task's team.
     Only while the task is To Do or In Progress. Once it has been Blocked, in Review or Done it carries history
-    worth keeping, so it cannot be deleted (409 `not_deletable`). Returns 204 with no body.
+    worth keeping, so it cannot be deleted (409 `not_deletable`). Returns 204 with no body. When Slack is set up, the
+    task's DM card (and the replies under it) are then deleted from the assignee's Slack, and their Home tab redrawn.
     """
+    messages = dm.removal_plan(db, task_id)  # read first: the delete takes the Slack message ids with it
     commands.delete_task(db, actor, task_id)
+    background.add_task(dm.remove_after_delete, *messages)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

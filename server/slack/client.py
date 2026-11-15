@@ -131,6 +131,11 @@ def update_message(token: str, channel: str, ts: str, text: str, blocks: list[di
     _call(token, "chat.update", json={"channel": channel, "ts": ts, **_content(text, blocks, color)})
 
 
+def delete_message(token: str, channel: str, ts: str) -> None:
+    """Delete one of the bot's own messages. Slack answers `message_not_found` if it is already gone."""
+    _call(token, "chat.delete", json={"channel": channel, "ts": ts})
+
+
 def publish_home(token: str, slack_user_id: str, view: dict) -> None:
     """Replace what this person sees on the bot's Home tab."""
     _call(token, "views.publish", json={"user_id": slack_user_id, "view": view})

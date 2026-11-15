@@ -168,6 +168,43 @@ def refresh_card(task_id: uuid.UUID) -> None:
         logger.exception("Refreshing the DM card for task %s failed", task_id)
 
 
+def removal_plan(db: Session, task_id: uuid.UUID) -> tuple[list[tuple[str, str]], str | None]:
+    """A query, to run BEFORE the task is deleted (the delete takes the DM rows with it): every Slack message that belongs to
+    the task as (channel, ts), the replies under each card first and then the card, and the assignee's Slack id so their Home
+    tab can be redrawn. Every card counts, the replaced ones too. Nothing when Slack is off or the task has no sent card."""
+    if not get_settings().slack_configured:
+        return [], None
+    refs: list[tuple[str, str]] = []
+    for card in db.scalars(select(SlackDm).where(SlackDm.task_id == task_id)):
+        channel, card_ts = card.dm_channel, card.message_ts
+        if channel is None or card_ts is None:  # never sent: nothing in Slack to remove
+            continue
+        replies = db.scalars(select(SlackDmMessage.ts).where(SlackDmMessage.dm_id == card.id).order_by(SlackDmMessage.created_at))
+        refs += [(channel, ts) for ts in replies]
+        refs.append((channel, card_ts))
+    assignee = db.scalar(select(Person).join(Task, Task.assignee_id == Person.id).where(Task.id == task_id))
+    slack_id = assignee.slack_user_id if assignee and REAL_SLACK_ID.match(assignee.slack_user_id or "") else None
+    return refs, slack_id
+
+
+def remove_after_delete(refs: list[tuple[str, str]], slack_id: str | None) -> None:
+    """After a task was deleted: take its messages out of the people's Slack DMs, then redraw the assignee's Home tab so the row
+    goes. A message that is already gone is fine; any other Slack problem is logged and the rest are still tried. Never raises."""
+    settings = get_settings()
+    if not settings.slack_configured:
+        return
+    for channel, ts in refs:
+        try:
+            client.delete_message(settings.slack_bot_token, channel, ts)
+        except client.SlackError as err:
+            if "message_not_found" not in str(err):
+                logger.warning("Slack did not delete message %s of a deleted task: %s", ts, err)
+        except Exception:  # noqa: BLE001
+            logger.exception("Deleting a Slack message of a deleted task failed")
+    if slack_id:
+        home.publish(slack_id)
+
+
 def after_reassign(task_id: uuid.UUID, old_person_id: uuid.UUID | None) -> None:
     """After the reply to a reassignment: send the new assignee their card (and the hand-over under it), close the old card
     with a note of who has the task now, and redraw both people's Home tabs. Never raises."""
