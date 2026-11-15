@@ -18,6 +18,14 @@ describe('describeAudit', () => {
     ['auth.login', 'Signed in'],
   ])('%s reads as a sentence', (action, text) => expect(describeAudit(entry(action))).toBe(text));
 
+  it('says what a people sync from Slack did, counting only what happened', () => {
+    const run = (details: Record<string, unknown>) => describeAudit(entry('directory.sync', { details, personName: null, teamName: null }));
+
+    expect(run({ added: 3, reactivated: 1, deactivated: 2 })).toBe('Synced the people from Slack: 3 added, 1 back, 2 deactivated');
+    expect(run({ added: 0, reactivated: 0, deactivated: 0 })).toBe('Synced the people from Slack: 0 added, 0 deactivated');
+    expect(run({})).toBe('Synced the people from Slack: 0 added, 0 deactivated'); // an entry with no counts does not break the page
+  });
+
   it('names the email of a refused sign-in and gives its reason in words', () => {
     const refused = entry('auth.login_failed', { actorName: null, reason: 'domain_not_allowed', details: { email: 'x@gmail.com' } });
     expect(describeAudit(refused)).toBe('Sign-in refused for x@gmail.com');

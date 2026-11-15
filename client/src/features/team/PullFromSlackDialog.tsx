@@ -15,6 +15,8 @@ interface Props {
   onClose: (added?: number) => void;
 }
 
+const PAGE_SIZE = 25; // a big channel is shown a page at a time; ticks are kept across pages
+
 /** Why a person in the channel cannot be ticked. */
 const whyNot = (m: ChannelMember): string =>
   m.state === 'on_this_team' ? 'Already on this team' : m.state === 'on_other_team' ? `On ${m.teamName ?? 'another team'}` : 'Cannot be added (inactive, or a manager)';
@@ -28,10 +30,16 @@ export function PullFromSlackDialog({ team, reasonOptional, onClose }: Props) {
   const found = useChannelMembers(team?.id ?? '', !!team);
   const add = useAddMembers(team?.id ?? '');
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
+  const [page, setPage] = useState(0);
 
   const members = found.data?.members ?? [];
   const available = members.filter((m) => m.state === 'available');
-  useEffect(() => { setTicked(new Set(found.data?.members.filter((m) => m.state === 'available').map((m) => m.person.id))); }, [found.data]);
+  const pages = Math.max(1, Math.ceil(members.length / PAGE_SIZE));
+  const shown = members.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  useEffect(() => {
+    setTicked(new Set(found.data?.members.filter((m) => m.state === 'available').map((m) => m.person.id)));
+    setPage(0);
+  }, [found.data]);
 
   const toggle = (id: string) => setTicked((t) => { const next = new Set(t); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
@@ -67,7 +75,7 @@ export function PullFromSlackDialog({ team, reasonOptional, onClose }: Props) {
             <p className="py-4 text-center text-base text-ink-muted">No one in this channel is in the directory.</p>
           ) : (
             <ul className="flex max-h-[320px] flex-col overflow-y-auto rounded-lg border border-line">
-              {members.map((m) => (
+              {shown.map((m) => (
                 <li key={m.person.id} className="flex items-center justify-between gap-3 border-b border-line px-3 py-2 last:border-b-0">
                   <CheckboxField
                     label={<span className="flex flex-col"><span className="text-base text-ink">{m.person.displayName}</span><span className="text-xs text-ink-subtle">{m.person.email}</span></span>}
@@ -79,6 +87,15 @@ export function PullFromSlackDialog({ team, reasonOptional, onClose }: Props) {
                 </li>
               ))}
             </ul>
+          )}
+          {pages > 1 && (
+            <div className="flex items-center justify-between gap-3 text-sm text-ink-muted">
+              <span>{page * PAGE_SIZE + 1} to {page * PAGE_SIZE + shown.length} of {members.length}</span>
+              <span className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button>
+                <Button type="button" variant="outline" size="sm" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>Next</Button>
+              </span>
+            </div>
           )}
         </div>
       )}

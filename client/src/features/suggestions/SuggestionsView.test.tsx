@@ -230,7 +230,21 @@ describe('SuggestionsView', () => {
     expect(h.restore).toHaveBeenCalledWith('s2', expect.anything());
   });
 
+  it('locks every Sync button while one sync runs, so a double click is one sync, and unlocks when it ends', async () => {
+    render(<SuggestionsView />);
+    const sync = screen.getByRole('button', { name: /Sync now/ });
+
+    await userEvent.dblClick(sync); // two presses before the first sync has finished
+    await userEvent.click(screen.getByRole('button', { name: 'Sync Ravi' })); // another Sync button, same lock
+    expect(h.sync).toHaveBeenCalledTimes(1);
+
+    h.sync.mock.calls[0][1].onSettled(); // the sync ends
+    await userEvent.click(sync);
+    expect(h.sync).toHaveBeenCalledTimes(2);
+  });
+
   it('syncs everyone on demand, or one person at a time', async () => {
+    h.sync.mockImplementation((_person, options) => options.onSettled()); // each sync finishes before the next press
     render(<SuggestionsView />);
     await userEvent.click(screen.getByRole('button', { name: /Sync now/ }));
     expect(h.sync).toHaveBeenLastCalledWith(undefined, expect.anything());

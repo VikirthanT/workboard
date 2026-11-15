@@ -391,6 +391,18 @@ export interface SuggestionPatch {
   dueAt?: string | null;
 }
 
+/** What one run of the people sync from Slack did, for the admin who pressed the button. */
+export interface DirectorySyncResult {
+  /** In the Slack workspace and listable. */
+  people: number;
+  added: number;
+  reactivated: number;
+  deactivated: number;
+  deactivatedOnATeam: number;
+  newAdmins: number;
+  skipped: number;
+}
+
 /** A channel in the standup app: `id` is what a team stores. The list is read live from the standup database. */
 export interface StandupChannel {
   id: string;

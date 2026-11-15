@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowsClockwise, ListChecks } from '@phosphor-icons/react';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
@@ -61,6 +61,8 @@ interface PageProps {
 function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
   const page = useSuggestions(teamId);
   const sync = useSyncSuggestions(teamId);
+  // A ref, not `sync.isPending`: a second click in the same frame still sees the old state, and each sync counts against 3 a minute.
+  const syncing = useRef(false);
   const reject = useRejectSuggestion();
   const restore = useRestoreSuggestion();
   const { toast } = useToast();
@@ -89,6 +91,12 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
   const toggle = (id: string) => setTicked((t) => { const next = new Set(t); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const untick = (id: string) => setTicked((t) => { const next = new Set(t); next.delete(id); return next; });
   const fail = (err: unknown) => toast(errorMessage(err), 'warning');
+  /** One sync at a time, for everyone or for one person: a second press while one runs does nothing. */
+  const runSync = (personId: string | undefined, done: string) => {
+    if (syncing.current) return;
+    syncing.current = true;
+    sync.mutate(personId, { onSuccess: () => toast(done, 'success'), onError: fail, onSettled: () => { syncing.current = false; } });
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-6 py-6">
@@ -112,7 +120,7 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
           <Button
             variant="outline"
             disabled={sync.isPending || !standupChannelId}
-            onClick={() => sync.mutate(undefined, { onSuccess: () => toast('Synced from the standup.', 'success'), onError: fail })}
+            onClick={() => runSync(undefined, 'Synced from the standup.')}
           >
             <ArrowsClockwise size={14} aria-hidden />{sync.isPending ? 'Syncing…' : 'Sync now'}
           </Button>
@@ -148,7 +156,7 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
                 size="sm"
                 variant="outline"
                 disabled={sync.isPending || !standupChannelId}
-                onClick={() => sync.mutate(current.person.id, { onSuccess: () => toast(`Synced ${current.person.displayName}.`, 'success'), onError: fail })}
+                onClick={() => runSync(current.person.id, `Synced ${current.person.displayName}.`)}
               >
                 <ArrowsClockwise size={14} aria-hidden />{sync.isPending && sync.variables === current.person.id ? 'Syncing…' : `Sync ${current.person.displayName}`}
               </Button>

@@ -15,9 +15,11 @@ export const getChannelNameKey = (id: string) => [...STANDUP_CHANNELS_KEY, 'name
 export const getChannelMembersKey = (teamId: string) => [...TEAMS_KEY, teamId, 'channel-members'] as const;
 export const SUGGESTIONS_KEY = ['suggestions'] as const;
 export const getSuggestionsKey = (teamId: string) => [...SUGGESTIONS_KEY, teamId] as const;
-export const UNASSIGNED_KEY = ['people', 'unassigned'] as const;
+/** Every cached list of people from the directory (the "Add person" picker, the Support picker): one key to refresh them all. */
+export const PEOPLE_KEY = ['people'] as const;
+export const UNASSIGNED_KEY = [...PEOPLE_KEY, 'unassigned'] as const;
 export const getUnassignedKey = (q: string) => [...UNASSIGNED_KEY, q] as const;
-export const getPeopleSearchKey = (q: string) => ['people', 'search', q] as const;
+export const getPeopleSearchKey = (q: string) => [...PEOPLE_KEY, 'search', q] as const;
 export const ADMINS_KEY = ['admins'] as const;
 export const getAdminCandidatesKey = (q: string) => [...ADMINS_KEY, 'candidates', q] as const;
 export const AUDIT_KEY = ['audit'] as const;

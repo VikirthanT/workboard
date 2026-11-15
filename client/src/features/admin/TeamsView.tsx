@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, UsersThree } from '@phosphor-icons/react';
+import { useRef, useState } from 'react';
+import { ArrowsClockwise, Plus, UsersThree } from '@phosphor-icons/react';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
 import { Button } from '../../app/components/ui/button';
@@ -18,7 +18,7 @@ import { CreateTeamDialog } from './CreateTeamDialog';
 import { DeleteTeamDialog } from './DeleteTeamDialog';
 import { EditStandupChannelDialog } from './EditStandupChannelDialog';
 import { AdminToggleDialog, ManagerChangeDialog } from './PersonDialogs';
-import { useAllTeamMembers, useStandupChannels, useTeams } from './hooks';
+import { useAllTeamMembers, useStandupChannels, useSyncPeople, useTeams } from './hooks';
 
 /**
  * The admin's portal: every team as a collapsible group with its people, a search box and role filter, a Manager /
@@ -38,6 +38,23 @@ export function TeamsView() {
   const [adding, setAdding] = useState<TeamRecord | null>(null);
   const [pulling, setPulling] = useState<TeamRecord | null>(null);
   const { toast } = useToast();
+  const syncPeople = useSyncPeople();
+  // A ref, not `isPending`: a second click in the same frame still sees the old state, and each run counts against 3 a minute.
+  const syncing = useRef(false);
+
+  /** The people sync, then a line saying what it did; the server's own words when it could not (no Slack, too many removals). */
+  function runSyncPeople() {
+    if (syncing.current) return;
+    syncing.current = true;
+    syncPeople.mutate(undefined, {
+      onSettled: () => { syncing.current = false; },
+      onSuccess: (r) => {
+        const parts = [`${r.people} people in Slack`, `${r.added} added`, ...(r.reactivated ? [`${r.reactivated} back`] : []), `${r.deactivated} deactivated`];
+        toast(`Synced from Slack: ${parts.join(', ')}.${r.deactivatedOnATeam ? ` ${r.deactivatedOnATeam} of the deactivated were on a team: their open tasks need a new owner.` : ''}`, 'success');
+      },
+      onError: (e) => toast(errorMessage(e), 'warning'),
+    });
+  }
   const [deleting, setDeleting] = useState<TeamRecord | null>(null);
   const [editingChannel, setEditingChannel] = useState<TeamRecord | null>(null);
   const [removing, setRemoving] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
@@ -68,7 +85,12 @@ export function TeamsView() {
             {teams.data ? `${list.length} ${list.length === 1 ? 'team' : 'teams'}, ${people} ${people === 1 ? 'person' : 'people'}` : ''}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}><Plus size={14} aria-hidden />Create team</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" disabled={syncPeople.isPending} onClick={runSyncPeople}>
+            <ArrowsClockwise size={14} aria-hidden />{syncPeople.isPending ? 'Syncing people…' : 'Sync people from Slack'}
+          </Button>
+          <Button onClick={() => setCreating(true)}><Plus size={14} aria-hidden />Create team</Button>
+        </div>
       </div>
 
       <Tabs defaultValue="teams">

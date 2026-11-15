@@ -3,9 +3,12 @@ import { getBoardKey, getPeopleSearchKey, getTaskKey } from '../../../app/consta
 import type { BoardQuery, ColumnSizes } from '../../../app/types/types';
 import { getBoard, getTask, searchPeople } from '../../../services/api';
 
-/** Anyone active in the directory matching `q`, searched on the server; loaded only while the Support picker is open. */
+/**
+ * Anyone active in the directory matching `q`, searched on the server; loaded only while the Support picker is open. Each
+ * search is kept for the whole session; an admin's Sync people or a membership change refreshes them.
+ */
 export function usePeopleSearch(enabled: boolean, q: string) {
-  return useQuery({ queryKey: getPeopleSearchKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData });
+  return useQuery({ queryKey: getPeopleSearchKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData, staleTime: Infinity, gcTime: Infinity });
 }
 
 /** Ten seconds: your own changes refresh it at once (the mutations invalidate it); a change made elsewhere, by Slack or by

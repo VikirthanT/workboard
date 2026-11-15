@@ -76,6 +76,38 @@ describe('PullFromSlackDialog', () => {
     expect(screen.getByText('Meena is already on a team.')).toBeInTheDocument();
   });
 
+  it('shows a big channel a page of 25 at a time, and keeps the ticks across pages', async () => {
+    const people = Array.from({ length: 60 }, (_, n) => member(`Person${String(n).padStart(2, '0')}`, 'available'));
+    h.found = loaded(people);
+    h.add.mockImplementation((_v, o) => o?.onSuccess?.());
+    const onClose = vi.fn();
+    render(<PullFromSlackDialog team={npi} reasonOptional onClose={onClose} />);
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(25);
+    expect(screen.getByText('1 to 25 of 60')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Person00/ })); // untick one on page 1
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('26 to 50 of 60')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Person25/ })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('51 to 60 of 60')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add 59 people' })); // all but the one unticked, from every page
+    expect(h.add.mock.calls[0][0].personIds).toHaveLength(59);
+    expect(h.add.mock.calls[0][0].personIds).not.toContain('Person00');
+    expect(onClose).toHaveBeenCalledWith(59);
+  });
+
+  it('shows no paging for a small channel', () => {
+    h.found = loaded([member('Meena', 'available')]);
+    render(<PullFromSlackDialog team={npi} reasonOptional onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+  });
+
   it('waits for the reason from an admin', () => {
     h.found = loaded([member('Meena', 'available')]);
     render(<PullFromSlackDialog team={npi} onClose={vi.fn()} />);

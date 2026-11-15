@@ -81,6 +81,16 @@ export interface WireSuggestionsPage {
   }[];
 }
 
+export interface WireDirectorySync {
+  people: number;
+  added: number;
+  reactivated: number;
+  deactivated: number;
+  deactivated_on_a_team: number;
+  new_admins: number;
+  skipped: number;
+}
+
 export interface WireStandupChannel {
   slack_channel_id: string;
   name: string;

@@ -3,7 +3,7 @@ import { ADMINS_KEY, getAdminCandidatesKey, getAuditKey, getChannelNameKey, getT
 import type { TeamRecord } from '../../../app/types/types';
 import {
   changeManager, createTeam, deleteTeam, getAdmins, getAudit, getChannelName, getStandupChannels, getTeamMembers, getTeams, searchPeople, setAdmin,
-  setStandupChannel,
+  setStandupChannel, syncPeople,
 } from '../../../services/api';
 import { useRefreshTeams } from '../../team/hooks';
 
@@ -18,14 +18,16 @@ export function useAllTeamMembers(teams: TeamRecord[]) {
   return useQueries({ queries: teams.map((t) => ({ queryKey: getTeamMembersKey(t.id), queryFn: () => getTeamMembers(t.id) })) });
 }
 
-/** Everyone with admin access, including admins who are on no team. */
+/** Everyone with admin access, including admins who are on no team. Kept for the session; an admin change or a people sync refreshes it. */
 export function useAdmins(enabled = true) {
-  return useQuery({ queryKey: ADMINS_KEY, queryFn: getAdmins, enabled });
+  return useQuery({ queryKey: ADMINS_KEY, queryFn: getAdmins, enabled, staleTime: Infinity, gcTime: Infinity });
 }
 
-/** People who could be made admin, searched on the server as you type. Loaded only while the picker is open. */
+/** People who could be made admin, searched on the server as you type. Loaded only while the picker is open; each search is kept for the session. */
 export function useAdminCandidates(enabled: boolean, q: string) {
-  return useQuery({ queryKey: getAdminCandidatesKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData });
+  return useQuery({
+    queryKey: getAdminCandidatesKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData, staleTime: Infinity, gcTime: Infinity,
+  });
 }
 
 /** One page of the audit log, newest first. The previous page stays on screen while the next one loads. */
@@ -71,6 +73,11 @@ export function useChannelName(channelId: string | null | undefined, enabled = t
     staleTime: Infinity, // a channel's name rarely changes: kept for the session, refreshed by a Sync like the channel list
     gcTime: Infinity,
   });
+}
+
+/** Sync the people from Slack. Who is on a team, who can be added and who is active all change, so those lists, the audit log and the boards refetch. */
+export function useSyncPeople() {
+  return useMutation({ mutationFn: syncPeople, onSuccess: useRefreshTeams() });
 }
 
 export function useSetStandupChannel() {

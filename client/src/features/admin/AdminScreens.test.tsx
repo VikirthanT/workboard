@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   auditPages: [] as number[],
   auditThrows: false,
   channels: [] as { id: string; name: string }[],
+  syncPeople: { mutate: vi.fn(), isPending: false },
+  toast: vi.fn(),
 }));
 vi.mock('../../hooks', () => ({ useCurrentUser: () => ({ data: h.me }) }));
 vi.mock('./hooks', () => ({
@@ -23,6 +25,7 @@ vi.mock('./hooks', () => ({
   useAllTeamMembers: () => h.members,
   useAdmins: () => h.admins,
   useStandupChannels: () => ({ data: h.channels }),
+  useSyncPeople: () => h.syncPeople,
   useAudit: (page: number) => { if (h.auditThrows) throw new Error('boom'); h.auditPages.push(page); return h.audit; },
 }));
 // The dialogs have their own tests; here they only need to show that they opened.
@@ -36,7 +39,7 @@ vi.mock('./PersonDialogs', () => ({
 }));
 vi.mock('../team/AddMemberDialog', () => ({ AddMemberDialog: () => null }));
 vi.mock('../team/PullFromSlackDialog', () => ({ PullFromSlackDialog: ({ team }: { team: { name: string } | null }) => team && <div>pull-open {team.name}</div> }));
-vi.mock('../../app/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../../app/components/ui/toast', () => ({ useToast: () => ({ toast: h.toast }) }));
 vi.mock('../team/RemoveMemberDialog', () => ({ RemoveMemberDialog: () => null }));
 
 const admin = { user: { id: 'u1' }, isAdmin: true };
@@ -145,6 +148,49 @@ describe('TeamsView', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Teams' }));
     expect(screen.getByRole('region', { name: 'Alpha' })).toBeInTheDocument();
     vi.restoreAllMocks();
+  });
+
+  describe('Sync people from Slack', () => {
+    beforeEach(() => { h.syncPeople = { mutate: vi.fn(), isPending: false }; h.toast.mockReset(); });
+
+    it('is locked from the first press until the sync ends, and says so on the button', async () => {
+      const { rerender } = render(<TeamsView />);
+      const button = screen.getByRole('button', { name: 'Sync people from Slack' });
+
+      await userEvent.dblClick(button); // two presses before the first has finished
+      expect(h.syncPeople.mutate).toHaveBeenCalledTimes(1);
+
+      h.syncPeople.isPending = true;
+      rerender(<TeamsView />);
+      expect(screen.getByRole('button', { name: 'Syncing people…' })).toBeDisabled();
+
+      h.syncPeople.isPending = false;
+      h.syncPeople.mutate.mock.calls[0][1].onSettled(); // the sync ends
+      rerender(<TeamsView />);
+      await userEvent.click(screen.getByRole('button', { name: 'Sync people from Slack' }));
+      expect(h.syncPeople.mutate).toHaveBeenCalledTimes(2);
+    });
+
+    it('says what the run did, and which of the deactivated were on a team', async () => {
+      h.syncPeople.mutate.mockImplementation((_v, o) => { o.onSuccess({ people: 120, added: 3, reactivated: 1, deactivated: 2, deactivatedOnATeam: 1, newAdmins: 0, skipped: 0 }); o.onSettled(); });
+      render(<TeamsView />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Sync people from Slack' }));
+
+      const [message, tone] = h.toast.mock.calls[0];
+      expect(tone).toBe('success');
+      expect(message).toContain('120 people in Slack, 3 added, 1 back, 2 deactivated');
+      expect(message).toContain('1 of the deactivated were on a team: their open tasks need a new owner');
+    });
+
+    it('shows the server\'s own words when it cannot sync (Slack not set up, too many removals)', async () => {
+      h.syncPeople.mutate.mockImplementation((_v, o) => { o.onError({ response: { data: { detail: { message: 'Slack is not set up on this server, so the people cannot be read from it.' } } } }); o.onSettled(); });
+      render(<TeamsView />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Sync people from Slack' }));
+
+      expect(h.toast).toHaveBeenCalledWith('Slack is not set up on this server, so the people cannot be read from it.', 'warning');
+    });
   });
 
   it('opens Delete team for the chosen team', async () => {

@@ -121,6 +121,12 @@ test.describe('teams and Slack', () => {
     await page.getByRole('button', { name: /Admin/ }).first().click();
     await page.getByRole('menuitem', { name: 'Teams' }).click();
 
+    // "Sync people from Slack": the throwaway server has no Slack, so the server's own words come back, and the button is free again.
+    const syncPeople = page.getByRole('button', { name: 'Sync people from Slack' });
+    await syncPeople.click();
+    await expect(page.getByText(/Slack is not set up on this server, so the people cannot be read from it/)).toBeVisible();
+    await expect(syncPeople).toBeEnabled();
+
     const npi = page.getByRole('region', { name: 'NPI' });
     await npi.getByRole('button', { name: /Pull from Slack/ }).click();
 
