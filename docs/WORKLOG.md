@@ -38,7 +38,7 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 ## Decisions and why
 
 - **10 Nov: the board loads five cards per column, and "Load more" adds five (decided with the user).** Not page numbers: on a Kanban board a page hides the cards above it and cards jump between pages as they move, so new cards are added below the ones shown. The server sorts, so the first five are the most urgent.
-- **10 Nov: board data is kept for five minutes on the client (decided with the user).** Your own changes refresh it at once; others' show on tab focus, a reload, or within five minutes. No Refresh button: a browser reload does it. Shorten this in Phase 2, when Slack (Accept, comments) changes cards from outside (`BOARD_FRESH_MS` in `client/src/features/board/hooks/useBoard.ts`).
+- **10 Nov: board data is kept for five minutes on the client (decided with the user).** Your own changes refresh it at once; others' show on tab focus, a reload, or within five minutes. No Refresh button: a browser reload does it. Shorten this in Phase 2, when Slack (Accept, comments) changes cards from outside (`BOARD_FRESH_MS` in `client/src/features/board/hooks/useBoard.ts`). **Superseded (checked 15 Nov): `BOARD_FRESH_MS` is now 10 seconds and the board and the open task poll every 10 seconds while the tab is visible (a hidden tab does not poll; focus refetches at once), so Slack changes show without a reload. Unchanged polls do not re-render, and the old cards stay on screen while a refetch runs.**
 - **10 Nov: a bulk import is listed and confirmed before anything is saved (decided with the user).** Every task starts ticked; unticked ones are left out.
 
 - **19 Oct: the API runs in IST.** One site, in India, so "today" (due dates, overdue, `completed_on`, reports) is the Indian date, from the server's clock via `TZ=Asia/Kolkata` (image, `make api-dev`, e2e, tests). Revisit with a timezone setting if a second site appears.
@@ -61,6 +61,32 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Person:** a people-directory entry (name, email, Slack ID). Never signs in; an assignee.
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
+
+## 15 Nov 2026: board search, task number on cards, Slack Home tab, feature guide
+
+**Summary.** On `feature-update/suggestion` (after `6564b36`): the board gets a search box and a task number on each card; the Slack Home tab, Details popup and shared Slack connection are committed; a manager can set their own team's standup channel; a feature guide is added. Not pushed, nothing merged.
+
+**Commits (oldest first).**
+- `44b0470` Add a board search box and show the task number on each card. `GET /api/board?q=` (title contains the text, any case, or the task number as `33` or `#33`; stats, counts and column totals follow it; `server/tasks/routers/board.py`, `services/queries.py`); `BoardSearch.tsx` before "Needs attention" (sent after a 300 ms pause, kept with the board view for the tab); `#<number>` before the title on `TaskCard.tsx`.
+- `6200416` Add the Slack Home tab, a Details popup and one shared Slack connection (`server/slack/`, `docs/slack-app-manifest.json`, `server/slack/README.md`, the Slack tests).
+- `93f8618` Let a manager set their own team's standup channel (`PATCH /api/teams/{id}/standup-channel` and `GET /api/standups/channels` now allow a manager for their own team; the reason is required from an admin only; team page and READMEs).
+- `134cb5f` Mark the manager's own row "(you)" on the Suggestions page.
+- `6c89bd8` Add a feature guide for stakeholders and engineers (`docs/FEATURE_GUIDE.md`).
+- `1c5bfe9` Plan: add quick-add from Slack and managed projects as later phases (`plan/PLAN.md`).
+
+**What changed.**
+- Search: the board only loads five cards per column, so the search runs on the server; searching the description or the assignee's name is not done.
+- Home tab: each task row ends with `Created Sat 15 Nov, 8:37 PM` (Indian time), after the due date (`blocks._created_at`, `_home_row`).
+- Channel announcements leave out tasks assigned to the team's manager (their DM card is still sent), and the PDF shows project and stage.
+- Details popup: the green and white squares beside names are gone; each timeline entry is a Slack quote (a line down its side), because a popup cannot draw a coloured bar (`blocks._thread_entry`).
+- DM thread: unchanged. Comments and moves keep the side bar, teal for the manager or an admin and grey for the assignee. A first edit removed the bars by mistake and was reverted the same day.
+- Docs: `server/slack/README.md` (new; there are no HTTP endpoints, the listener uses Socket Mode; commands and queries listed separately) and `docs/FEATURE_GUIDE.md` (new; a stakeholder part and an engineer part with endpoints, command and query split, and a requests/TLS table).
+
+**State of production (reported by the user, not verifiable from the repo).** HTTPS is set up on the server and Phase 1 is live there without issues. The repo's nginx still listens on port 80 only and receives plain HTTP from the layer in front; the guide says so.
+
+**Checked.** `make server-test`: 967 passed, 0 failed; client `tsc --noEmit` clean and vitest 244 of 244, all on the final tree (the commits were not tested one by one). `make e2e` not run.
+
+**Not done or not checked.** `client/playwright.slack.config.ts` has a stray `make` at the start of line 1 (not mine; left uncommitted, needs fixing). `HANDOFF.md` is untracked and left out. The search box and card number were not looked at in a browser, light or dark. No test for the new `Created` text on the Home row, none for the manager's standup-channel dialog or the "(you)" label. Nothing looked at in real Slack. `docs/FEATURES.md` still says 605 tests. Whether Postgres itself uses TLS is not set up in this repo's compose files and was not checked further. The "due within 2 days" Slack alert is not built.
 
 ## 13 Nov 2026: standup suggestions, the Slack bot, task numbers, overdue chip
 
