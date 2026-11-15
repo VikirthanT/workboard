@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import atiLogoFull from '../../assets/ati-logo-full.svg';
 import atiLogoFullInverse from '../../assets/ati-logo-full-inverse.svg';
-import { Button } from '../../app/components/ui/button';
+import googleMark from '../../assets/google-mark.svg';
 import { errorCode, errorMessage, getSession } from '../../services/api';
 import { DevAccountChooser } from './DevAccountChooser';
+import { LoginPattern } from './LoginPattern';
 import { useDevSignIn, useGoogleExchange } from './hooks';
-import './login-backdrop.css';
+import './login-page.css';
 
 /* Same callback contract as Mdm Duro: Google -> /login?code=... -> exchange -> session,
    or /login?error=<code>. In development the "Google" step is the account list below. */
@@ -23,8 +24,6 @@ const OAUTH_ERRORS: Record<string, string> = {
 };
 
 const GOOGLE_REDIRECT_TIMEOUT_MS = 10_000;
-
-const rise = (ms: number) => ({ animationDelay: `${ms}ms` });
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -102,35 +101,40 @@ export function LoginPage() {
 
   return (
     <div className="login-page">
-      {/* Split: the copy on the left and the sign-in card on the right share one vertical centre. Logo in the corner. */}
-      <div className="login-brand-panel relative flex min-h-screen flex-col px-6 py-10 min-[821px]:px-16">
-        <div className="flex animate-slide-up items-center gap-3" style={rise(100)}>
-          <img src={atiLogoFull} alt="Ati" className="h-12 w-auto dark:hidden" />
-          <img src={atiLogoFullInverse} alt="Ati" className="hidden h-12 w-auto dark:block" />        </div>
-        <div className="my-auto grid items-center gap-12 py-10 min-[821px]:grid-cols-[1fr_500px] min-[821px]:gap-20 min-[821px]:pr-28">
-          <div className="animate-slide-up">
-            <p className="font-display text-display font-semibold text-ink">
-              Your team's work,
-              <br />
-              <span className="text-brand">at a glance</span>.
-            </p>
-            <p className="mt-5 max-w-[46ch] text-md text-ink-muted">
-              Create and assign tasks, spot what's overdue or blocked, and review work before it's marked Done.
-            </p>
-          </div>
-          {/* A small box of its own over the backdrop. */}
-          <div className="w-full rounded-lg border border-line bg-surface p-12 shadow-raised animate-slide-up" style={rise(200)}>
-            <div className="mb-8">
-              <h1 className="font-display text-lg font-semibold text-ink">Sign in to Work Board</h1>
-              <p className="mt-2 text-md text-ink-muted">Use your @atimotors.com account.</p>
-            </div>
-            <Button type="button" size="lg" className="w-full" onClick={startGoogle} disabled={busy}>
-              {busy ? <Spinner /> : 'Continue with Google'}
-            </Button>
-            {formError && <p role="alert" className="mt-4 text-sm text-danger-ink">{formError}</p>}
-          </div>
-        </div>
+      {/* Copy on the left, sign-in card on the right, the block pattern in the top right corner and the logo bottom left. */}
+      <LoginPattern className="login-pattern" />
+
+      <div className="login-copy">
+        <h1 className="login-title font-display font-semibold text-ink">
+          Your team's work,
+          <br />
+          <span className="text-brand">at a glance</span>.
+        </h1>
+        <p className="login-lede text-ink-muted">
+          Create and assign tasks, spot what's overdue or blocked, and review work before it's marked Done.
+        </p>
       </div>
+
+      <div className="login-card">
+        <div className="login-card-head">
+          <h2 className="login-card-title font-display font-semibold text-ink">Sign in</h2>
+          <p className="login-card-text text-ink-muted">Use your @atimotors.com account.</p>
+        </div>
+        <button type="button" className="login-google" onClick={startGoogle} disabled={busy}>
+          {busy ? (
+            <Spinner />
+          ) : (
+            <>
+              <img src={googleMark} alt="" aria-hidden />
+              Continue with Google
+            </>
+          )}
+        </button>
+        {formError && <p role="alert" className="mt-4 text-sm text-danger-ink">{formError}</p>}
+      </div>
+
+      <img src={atiLogoFull} alt="Ati" className="login-logo dark:hidden" />
+      <img src={atiLogoFullInverse} alt="Ati" className="login-logo hidden dark:block" />
 
       {import.meta.env.DEV && (
         <DevAccountChooser open={chooser} onOpenChange={setChooser} onPick={pickAccount} onGoogle={signInWithGoogle} />
