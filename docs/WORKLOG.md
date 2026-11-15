@@ -98,7 +98,13 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - `4496b38` Require a due date when suggestions are added, on the server and in the dialog (`POST /api/teams/{id}/suggestions/add` takes `due_dates`; 422 `due_date_required` and `invalid_due_dates`; the Add dialog has a required date picker per ticked suggestion). This commit also carries the READMEs, the feature guide and the page's week test for the week-only change, because they share files.
 - `6de4b50` Put "Needs attention" and "Needs review" in the Filters menu (the tick beside the search box and the "Needs review" header link are gone; the `/?filter=needs_review` URL handling is removed).
 
+- `d616218` Add end-to-end tests for the whole working process (`client/e2e/process.spec.ts`, six flows; the create-team smoke test fixed because a team now needs a standup channel; `scripts/e2e_seed.py` seeds two suggestions; Slack tokens blanked for the run). `make e2e`: 8 of 8.
+- `957f535` Keep the Suggestions page and the channel list for the whole session (read once, replaced only by a Sync or the manager's own change; sign-out clears it).
+- `0da6570` Limit standup syncs to 3 a minute and Slack lookups to 20 a minute (per person; the scheduled sync is not counted; bulk add keeps only the general limit).
+
 **Also decided.** The week starts on Monday (a Sunday still belongs to the week that began the Monday before). Due date: compulsory for tasks made from suggestions (server and page); regular task creation is unchanged. The standup schedule to set in the production `.env` is `tue 12:00, wed 12:00` (a Monday run is not needed: Tuesday's run reads Monday's posts), with `tue 18:00` optional.
+
+**Rate limits now.** Every signed-in endpoint 300 a minute per person; bulk upload 6; standup sync 3; Slack lookups (members, channel name) 20; sign-in 10 per email in 10 minutes; nginx 600 a minute per address (30 on `/api/auth/`). The audit log is paginated on the server (50 a page, at most 200) with only the general limit, and is refetched on open rather than cached. Not tried on production or against a real workspace in this batch; the Slack pull was tried for real by the user.
 
 **Slips.** Three test files were edited with `sed -i` during the session against the Edit-only rule (one temporarily for a debug run, restored; an import line in `requests.test.ts`; three strings in `SuggestionsView.test.tsx`). Each result was checked. `pkill -f` once matched its own command line and killed the shell.
 
