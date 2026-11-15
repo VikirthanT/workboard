@@ -28,6 +28,18 @@ describe('useBoardParams', () => {
     expect(again.result.current.taskId).toBe('t1');
   });
 
+  it('keeps the search with the view, and clearing it empties the query', () => {
+    const first = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    act(() => first.result.current.setSearch('#33'));
+    expect(first.result.current.query.search).toBe('#33');
+    first.unmount();
+
+    const again = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    expect(again.result.current.query.search).toBe('#33');
+    act(() => again.result.current.setSearch(''));
+    expect(again.result.current.query.search).toBe('');
+  });
+
   it('keeps each team its own view', () => {
     const npi = renderHook(() => useBoardParams('npi-id'), { wrapper: at('/') });
     act(() => npi.result.current.toggleFilter('blocked'));

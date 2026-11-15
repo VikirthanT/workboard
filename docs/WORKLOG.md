@@ -86,7 +86,9 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 
 **Checked.** `make server-test`: 967 passed, 0 failed; client `tsc --noEmit` clean and vitest 244 of 244, all on the final tree (the commits were not tested one by one). `make e2e` not run.
 
-**Not done or not checked.** `client/playwright.slack.config.ts` has a stray `make` at the start of line 1 (not mine; left uncommitted, needs fixing). `HANDOFF.md` is untracked and left out. The search box and card number were not looked at in a browser, light or dark. No test for the new `Created` text on the Home row, none for the manager's standup-channel dialog or the "(you)" label. Nothing looked at in real Slack. `docs/FEATURES.md` still says 605 tests. Whether Postgres itself uses TLS is not set up in this repo's compose files and was not checked further. The "due within 2 days" Slack alert is not built.
+**Tests added after the commits above** (follow-up commit): the Home row's `Created` time, the manager's standup-channel dialog (reason optional for a manager, required for an admin, same channel refused), the standup-channel button on the team header, the "(you)" label on Suggestions, the search kept with the board view, and that an unchanged board poll keeps the same data and draws nothing again (`useBoard.test.tsx`). Final tree: `make server-test` 967 passed; client `tsc` clean and vitest 252 of 252.
+
+**Not done or not checked.** The search box and card number were not looked at in a browser, light or dark; `make e2e` not run. The Slack bot has been tried in a real workspace by the user (reported, not re-checked here). `docs/FEATURES.md` still says 605 tests. Whether Postgres itself uses TLS is not set up in this repo's compose files and was not checked further. The "due within 2 days" Slack alert is a later part, not planned for this phase. A stray `make` in `client/playwright.slack.config.ts` and an untracked `HANDOFF.md` were discarded (the config went back to its committed version).
 
 ## 13 Nov 2026: standup suggestions, the Slack bot, task numbers, overdue chip
 

@@ -59,6 +59,20 @@ beforeEach(() => {
 });
 
 describe('SuggestionsView', () => {
+  it('marks the signed-in manager’s own row and heading "(you)", and nobody else', async () => {
+    const me = entry('u1', 'Meena', post(), []);
+    h.page = loaded([me, ravi]);
+    render(<SuggestionsView />);
+
+    const list = screen.getByRole('navigation', { name: 'Team members' });
+    expect(within(list).getAllByText('(you)')).toHaveLength(1);
+    expect(within(within(list).getByRole('button', { name: /Ravi/ })).queryByText('(you)')).not.toBeInTheDocument();
+    expect(screen.getAllByText('(you)')).toHaveLength(1); // Ravi is the one open, so the heading does not say it
+
+    await userEvent.click(within(list).getByRole('button', { name: /Meena/ }));
+    expect(screen.getAllByText('(you)')).toHaveLength(2); // the row, and now the heading
+  });
+
   it('tells a non-manager the page is for managers', () => {
     h.me = { ...manager, isManager: false };
     render(<SuggestionsView />);

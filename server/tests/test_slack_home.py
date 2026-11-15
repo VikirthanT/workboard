@@ -1,5 +1,6 @@
 """The Home tab of the bot: what a person sees when they open it, the Stage filter, the controls on each row, and that it is
 redrawn after a move. Slack is a fake; people and work are made up."""
+import re
 import uuid
 from datetime import date, timedelta
 
@@ -90,6 +91,7 @@ def test_each_row_has_the_priority_dot_tags_due_date_and_the_cards_controls(db, 
     [(_, view)] = slack["homes"]
     [row] = rows(view)
     assert row.startswith(":red_circle: *Task #") and "Design weld jig" in row and "`P1`  `Design`" in row and "Due " in row
+    assert re.search(r"Created \w{3} \d{1,2} \w{3}, \d{1,2}:\d{2} [AP]M$", row)  # the day and time it was made, as the last thing on the row
     [actions] = [b for b in view["blocks"] if b["type"] == "actions" and b["block_id"] != "wb_home_filter"]
     kinds = {e["action_id"] for e in actions["elements"]}
     assert kinds == {blocks.STATUS_ACTION, blocks.COMMENT_ACTION, blocks.HOME_DETAILS_ACTION}  # the DM card's handlers, plus Details

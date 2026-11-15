@@ -41,6 +41,17 @@ describe('TeamSection', () => {
     expect(screen.getByText('0 of 2')).toBeInTheDocument();
   });
 
+  it('shows the standup channel button only when the caller can edit it, and opens the editor', async () => {
+    const { rerender } = render(<TeamSection team={team({ standupChannelId: 'C0NPI' })} members={[boss]} totalMembers={1} onAdd={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /Standup channel of/ })).not.toBeInTheDocument();
+
+    const onEditChannel = vi.fn();
+    rerender(<TeamSection team={team({ standupChannelId: 'C0NPI' })} members={[boss]} totalMembers={1} onAdd={vi.fn()} onRemove={vi.fn()} onEditChannel={onEditChannel} channelName="npi-standup" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Standup channel of Alpha' }));
+    expect(screen.getByText('npi-standup')).toBeInTheDocument();
+    expect(onEditChannel).toHaveBeenCalledTimes(1);
+  });
+
   it('locks the manager row: remove is disabled and explains why', () => {
     setup();
     expect(screen.getByRole('button', { name: /Boss One is the manager/ })).toBeDisabled();
