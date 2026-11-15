@@ -26,7 +26,7 @@ One team has one manager, a manager runs one team, a person is on at most one te
 | Feature | What a stakeholder sees | Status |
 | --- | --- | --- |
 | Google sign-in | One "Continue with Google" button, company accounts only, only managers and admins get in | Built; live on the production server over HTTPS (reported by the team) |
-| Kanban board | Five columns (To Do, In Progress, Blocked, Review, Done); drag cards; filters; "Needs attention" (overdue, blocked, in Review, needing a new owner); overdue cards say "Overdue by N days" | Built |
+| Kanban board | Five columns (To Do, In Progress, Blocked, Review, Done); drag cards; one Filters menu with "Needs attention" (overdue, blocked, in Review, needing a new owner), "Needs my review", overdue, blocked and due this week, each with its count; a search box; overdue cards say "Overdue by N days" | Built |
 | Tasks | Title, description, priority (the card colour), project, stage, start and due date, assignee; every change and comment on a timeline that cannot be edited | Built |
 | Rules that keep the data honest | A due date cannot be in the past; blocking, moving back, sending back and reopening need a reason; any move to Done needs remarks; a Done task is locked until reopened; only To Do and In Progress tasks can be deleted | Built, enforced on the server |
 | Bulk upload | Download an Excel template, fill it in, preview, confirm: all rows are created or none | Built |
@@ -131,9 +131,9 @@ Not HTTP, but commands the Slack side uses: `move_task_as_assignee` (up to Revie
 | `GET /standups/channels` | query | Channels in the standup database, read live (admin or manager) |
 | `GET /standups/channels/{channel_id}` | query | The name of a channel id: the standup database first, then Slack (admin or manager) |
 | `GET /teams/{id}/suggestions` | query | Each person's last standup and their suggestions |
-| `POST /teams/{id}/suggestions/sync?person_id=` | command | Reads the channel (last 14 days), asks the language model, stores suggestions; runs inside the request. The team's manager, or any admin (to check the connection); the rest stays with the manager |
+| `POST /teams/{id}/suggestions/sync?person_id=` | command | Reads the channel (this week's standups only, from this week's Monday), asks the language model, stores suggestions; runs inside the request. The team's manager, or any admin (to check the connection); the rest stays with the manager |
 | `PATCH /suggestions/{id}`, `POST .../reject`, `POST .../restore` | command | Edit, reject, bring back (restorable for 3 days) |
-| `POST /teams/{id}/suggestions/add` | command | Create a task from each chosen suggestion, all or nothing |
+| `POST /teams/{id}/suggestions/add` | command | Create a task from each chosen suggestion, all or nothing. A due date is compulsory: one a suggestion lacks (or the manager changes) is sent in `due_dates`; without it the server answers 422 `due_date_required` |
 
 The scheduler (`python -m standups.scheduler`, times from `STANDUP_SYNC_SCHEDULE`) runs the same sync with no actor. A sync never creates or deletes tasks, only replaces pending and rejected suggestions. The standup database is opened read-only.
 

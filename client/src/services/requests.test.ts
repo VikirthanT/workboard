@@ -120,9 +120,13 @@ describe('standups service', () => {
     expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync', undefined, { params: { person_id: 'p2' } });
   });
 
-  it('adds suggestions with POST and the ids in snake_case', async () => {
-    await addSuggestions({ teamId: 't1', suggestionIds: ['s1', 's2'] });
-    expect(post).toHaveBeenCalledWith('/teams/t1/suggestions/add', { suggestion_ids: ['s1', 's2'] });
+  it('adds suggestions with POST, the ids in snake_case and the due dates by suggestion id', async () => {
+    await addSuggestions({ teamId: 't1', suggestionIds: ['s1', 's2'], dueDates: { s1: '2026-12-01', s2: '2026-12-02' } });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/add', {
+      suggestion_ids: ['s1', 's2'], due_dates: { s1: '2026-12-01', s2: '2026-12-02' },
+    });
+    await addSuggestions({ teamId: 't1', suggestionIds: ['s1'] }); // no dates given: none are sent
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/add', { suggestion_ids: ['s1'], due_dates: undefined });
   });
 
   it('edits with PATCH sending only the fields given, and a null date to clear it', async () => {

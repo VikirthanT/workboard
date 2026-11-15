@@ -12,6 +12,7 @@ from models import Task, TaskSuggestion
 from standups.llm import extract
 from standups.services import queries, sync
 from standups.standup_db import reader
+from standups.states import week_start
 from tests.conftest import make_team
 
 TODAY = date.today()
@@ -91,6 +92,20 @@ def test_the_standup_blocks_come_from_the_standup_database_and_need_no_sync_and_
     assert ravi_entry(page)["standup"]["this_week"] == f"- {QUOTE}" and ravi_entry(page)["suggestions"] == []
 
 
+def test_the_page_shows_only_this_weeks_standups(world, monkeypatch):
+    asked = []
+
+    def recording(channel, since):
+        asked.append(since)
+        return world["posts"]
+
+    monkeypatch.setattr(queries.reader, "list_submissions", recording)
+
+    call(world, world["asha"], "GET", f"/teams/{world['team']['id']}/suggestions")
+
+    assert asked == [week_start(TODAY)]  # this week's Monday: an earlier week's post is never asked for, so never shown
+
+
 def test_a_standup_database_that_cannot_be_read_is_reported_not_a_500_or_a_silent_empty_page(world, monkeypatch):
     def unreadable(channel, since):
         raise OperationalError("select", {}, Exception("unable to open database file"))
@@ -142,6 +157,23 @@ def test_adding_with_a_broken_task_rule_adds_nothing_and_names_the_suggestion(wo
     assert res.status_code == 422 and res.json()["detail"]["code"] == "due_date_past"
     assert "Design weld jig for rear axle" in res.json()["detail"]["message"]
     assert db.scalar(select(func.count()).select_from(Task)) == 0
+
+
+def test_adding_a_suggestion_with_no_due_date_is_refused_by_the_server_until_a_date_is_sent(world, db):
+    sid = ravi_entry(synced(world))["suggestions"][0]["id"]
+    # The fixture's standup is next Monday, so move the start back with the due date before clearing it.
+    assert call(world, world["asha"], "PATCH", f"/suggestions/{sid}", json={"start_at": TODAY.isoformat(), "due_at": None}).status_code == 200
+    add = lambda body: call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/add", json=body)  # noqa: E731
+
+    refused = add({"suggestion_ids": [sid]})
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "due_date_required")
+    assert "Design weld jig for rear axle" in refused.json()["detail"]["message"]
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
+
+    due = (TODAY + timedelta(days=5)).isoformat()
+    ok = add({"suggestion_ids": [sid], "due_dates": {sid: due}})
+    assert ok.status_code == 200
+    assert db.scalar(select(Task)).due_at.isoformat() == due
 
 
 def test_a_due_date_cannot_be_chosen_in_the_past_but_today_and_clearing_are_fine(world):

@@ -47,7 +47,7 @@ export function useSyncSuggestions(teamId: string) {
 export function useAddSuggestions(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (suggestionIds: string[]) => addSuggestions({ teamId, suggestionIds }),
+    mutationFn: (v: { suggestionIds: string[]; dueDates: Record<string, string> }) => addSuggestions({ teamId, ...v }),
     onSuccess: (page: SuggestionsPage) => {
       qc.setQueryData(getSuggestionsKey(teamId), page);
       return Promise.all([BOARD_KEY, TASK_KEY, ME_KEY, REPORT_KEY].map((queryKey) => qc.invalidateQueries({ queryKey })));

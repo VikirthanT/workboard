@@ -67,11 +67,24 @@ def restore_suggestion(db: Session, actor: Person, suggestion_id: uuid.UUID) -> 
     db.commit()
 
 
-def add_to_board(db: Session, actor: Person, team_id: uuid.UUID, suggestion_ids: list[uuid.UUID]) -> None:
-    """Create a task from each chosen pending suggestion, assigned to the person it is for, and mark them approved."""
+def add_to_board(
+    db: Session,
+    actor: Person,
+    team_id: uuid.UUID,
+    suggestion_ids: list[uuid.UUID],
+    due_dates: dict[uuid.UUID, date] | None = None,
+) -> None:
+    """Create a task from each chosen pending suggestion, assigned to the person it is for, and mark them approved.
+
+    A task made this way must have a due date. A suggestion that has none (or whose date the manager changes) gets it from
+    `due_dates`, keyed by suggestion id; if any chosen suggestion still has no date, nothing is added and the error names it.
+    The date is stored on the suggestion, as the manager's own rather than a default."""
     team = get_team(db, team_id)
     require_act(actor, team)
     ids = list(dict.fromkeys(suggestion_ids))
+    due_dates = due_dates or {}
+    if not set(due_dates) <= set(ids):
+        raise AppError("invalid_due_dates", "A due date was given for a suggestion that is not being added.", 422)
     chosen = list(db.scalars(
         select(TaskSuggestion).where(TaskSuggestion.id.in_(ids), TaskSuggestion.team_id == team.id)
         .order_by(TaskSuggestion.created_at, TaskSuggestion.title).with_for_update()
@@ -80,6 +93,12 @@ def add_to_board(db: Session, actor: Person, team_id: uuid.UUID, suggestion_ids:
         raise AppError("suggestion_not_found", "One of those suggestions no longer exists.", 404)
     if any(s.state != "pending" for s in chosen):
         raise AppError("suggestion_not_pending", "One of those suggestions has already been added or rejected.", 409)
+    for s in chosen:  # every date is settled before anything is created, so a missing one adds nothing
+        due = due_dates.get(s.id, s.due_at)
+        if due is None:
+            raise AppError("due_date_required", f"“{s.title}”: choose a due date. A task needs one.", 422)
+        if due != s.due_at:
+            s.due_at, s.due_is_default = due, False
     for s in chosen:
         task_id = uuid.uuid4()
         description = s.description + ("\n\nParts:\n" + "\n".join(f"- {part}" for part in s.subtasks) if s.subtasks else "")

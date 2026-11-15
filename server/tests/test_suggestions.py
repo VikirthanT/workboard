@@ -137,6 +137,59 @@ def test_a_rejected_suggestion_cannot_be_edited_or_rejected_again(db, world, mak
 
 # ---- add to the board ----
 
+def test_a_suggestion_without_a_due_date_cannot_be_added_and_nothing_is_created(db, world, make):
+    dated = make("Design weld jig")
+    undated = make("Order bracket samples", due_at=None)
+
+    with pytest.raises(AppError) as err:
+        service.add_to_board(db, world["asha"], world["team_id"], [dated.id, undated.id])
+
+    assert (err.value.code, err.value.status_code) == ("due_date_required", 422)
+    assert "Order bracket samples" in err.value.message
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
+    assert refetch(db, dated).state == "pending" and refetch(db, undated).state == "pending"  # the dated one was not added either
+
+
+def test_the_manager_can_give_the_missing_due_date_while_adding_and_it_is_kept(db, world, make):
+    undated = make("Order bracket samples", due_at=None, due_is_default=True)
+    due = TODAY + timedelta(days=6)
+
+    service.add_to_board(db, world["asha"], world["team_id"], [undated.id], {undated.id: due})
+
+    task = db.scalar(select(Task))
+    assert task.due_at == due and task.title == "Order bracket samples"
+    kept = refetch(db, undated)
+    assert (kept.state, kept.due_at, kept.due_is_default) == ("approved", due, False)  # the manager's own date, not a default
+
+
+def test_the_manager_can_change_a_date_a_suggestion_already_has_while_adding(db, world, make):
+    s = make("Design weld jig", due_at=TODAY + timedelta(days=3))
+    later = TODAY + timedelta(days=9)
+
+    service.add_to_board(db, world["asha"], world["team_id"], [s.id], {s.id: later})
+
+    assert db.scalar(select(Task)).due_at == later
+
+
+def test_a_date_given_for_a_suggestion_that_is_not_being_added_is_refused(db, world, make):
+    added, other = make("Design weld jig"), make("Order bracket samples")
+
+    with pytest.raises(AppError) as err:
+        service.add_to_board(db, world["asha"], world["team_id"], [added.id], {other.id: TODAY + timedelta(days=2)})
+
+    assert (err.value.code, err.value.status_code) == ("invalid_due_dates", 422)
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
+
+
+def test_a_date_given_while_adding_still_may_not_be_in_the_past(db, world, make):
+    undated = make("Order bracket samples", due_at=None)
+
+    with pytest.raises(AppError) as err:
+        service.add_to_board(db, world["asha"], world["team_id"], [undated.id], {undated.id: TODAY - timedelta(days=1)})
+
+    assert err.value.code == "due_date_past" and "Order bracket samples" in err.value.message
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
+
 def test_adding_creates_a_task_for_each_suggestion_assigned_to_its_person(db, world, make):
     one = make("Design weld jig", priority="high", subtasks=["table", "mounting plate"], start_at=TODAY)
     two = make("Order bracket samples", person=world["asha"])

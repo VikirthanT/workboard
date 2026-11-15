@@ -88,3 +88,6 @@ class SuggestionEdit(BaseModel):
 
 class AddSuggestions(BaseModel):
     suggestion_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+    # A task needs a due date. One a suggestion lacks (or the manager changes) comes here, by suggestion id; every chosen
+    # suggestion must end up with one.
+    due_dates: dict[uuid.UUID, date] = Field(default_factory=dict, max_length=100)

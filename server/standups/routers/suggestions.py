@@ -84,7 +84,7 @@ def sync_suggestions(
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
-    """Read the team's standup channel (the last 14 days), propose tasks from the team's people's posts, and return the
+    """Read the team's standup channel (this week's standups only: those dated on or after this week's Monday), propose tasks from the team's people's posts, and return the
     page. Posts already read and unchanged are skipped. Runs the language model, so it can take a while.
 
     `person_id` (optional) syncs only that person, so a manager can go one person at a time.
@@ -113,10 +113,14 @@ def add_suggestions(
     a task rule (for example a due date in the past), none is added and the message names it. When Slack is set up the
     new tasks are then announced in the team's standup channel as one message and one PDF (after this reply).
 
-    Who: the team's own manager. Body: {suggestion_ids}. Errors: 403 `forbidden`; 404 `suggestion_not_found`;
-    409 `suggestion_not_pending`; and the task rules' own codes (`due_date_past`, ...), with the title in the message.
+    A due date is compulsory. A suggestion that has none must be given one in `due_dates` (by suggestion id), and the manager
+    may change any date there; the date is kept on the suggestion.
+
+    Who: the team's own manager. Body: {suggestion_ids, due_dates?}. Errors: 403 `forbidden`; 404 `suggestion_not_found`;
+    409 `suggestion_not_pending`; 422 `due_date_required` (the message names the suggestion) and `invalid_due_dates` (a date for
+    a suggestion not being added); and the task rules' own codes (`due_date_past`, ...), with the title in the message.
     """
-    commands.add_to_board(db, actor, team_id, body.suggestion_ids)
+    commands.add_to_board(db, actor, team_id, body.suggestion_ids, body.due_dates)
     background.add_task(announce.flush_team, team_id, messages.HEADING_STANDUP)
     return _page(db, actor, team_id)
 

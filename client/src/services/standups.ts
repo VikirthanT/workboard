@@ -33,9 +33,15 @@ export async function syncSuggestions(p: { teamId: string; personId?: string }):
   return mapSuggestionsPage(data);
 }
 
-/** Create a task from each chosen pending suggestion, assigned to the person it is for. All or nothing. Returns the page. */
-export async function addSuggestions(p: { teamId: string; suggestionIds: string[] }): Promise<SuggestionsPage> {
-  const { data } = await apiClient.post<WireSuggestionsPage>(`/teams/${p.teamId}/suggestions/add`, { suggestion_ids: p.suggestionIds });
+/**
+ * Create a task from each chosen pending suggestion, assigned to the person it is for. All or nothing. Returns the page.
+ * A task needs a due date: `dueDates` (by suggestion id, "YYYY-MM-DD") gives the ones a suggestion lacks, or changes one.
+ */
+export async function addSuggestions(p: { teamId: string; suggestionIds: string[]; dueDates?: Record<string, string> }): Promise<SuggestionsPage> {
+  const { data } = await apiClient.post<WireSuggestionsPage>(`/teams/${p.teamId}/suggestions/add`, {
+    suggestion_ids: p.suggestionIds,
+    due_dates: p.dueDates && Object.keys(p.dueDates).length > 0 ? p.dueDates : undefined,
+  });
   return mapSuggestionsPage(data);
 }
 
