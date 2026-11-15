@@ -81,6 +81,16 @@ def get_activity(db: Session, actor: Person, entry_id: uuid.UUID) -> schemas.Act
 
 # ---- the board ----
 
+def _matches_search(task: Task, search: str) -> bool:
+    """The board's search box: part of the title (any case), or the task number with or without the `#` ("#33", "33").
+    An empty search matches every task."""
+    text = search.strip().lower()
+    if not text:
+        return True
+    digits = text.removeprefix("#")
+    return text in task.title.lower() or (digits.isdigit() and int(digits) == task.number)
+
+
 def get_board(
     db: Session,
     actor: Person,
@@ -91,6 +101,7 @@ def get_board(
     attention: bool = False,
     limit: int | None = None,
     show: list[str] | None = None,
+    search: str = "",
     today: date | None = None,
 ) -> schemas.Board:
     """`team` comes from resolve_board_team, which has already checked the actor may read it.
@@ -115,7 +126,7 @@ def get_board(
     def assignee(task: Task) -> Person | None:
         return context.people.get(task.assignee_id)  # None when unassigned
 
-    scoped = [t for t in visible if person_id is None or t.assignee_id == person_id]
+    scoped = [t for t in visible if (person_id is None or t.assignee_id == person_id) and _matches_search(t, search)]
     attention_tasks = [t for t in scoped if rules.needs_attention(t, assignee(t), today)]
     in_view = attention_tasks if attention else scoped
     matches = {

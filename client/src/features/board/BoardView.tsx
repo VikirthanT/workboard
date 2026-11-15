@@ -17,6 +17,7 @@ import { errorMessage } from '../../services/api';
 import { useTeams } from '../admin';
 import { NoTeamPage } from '../team';
 import { OrphanBanner } from './components/BoardPanels';
+import { BoardSearch } from './components/BoardSearch';
 import { FilterMenu } from './components/FilterMenu';
 import { ImportDialog } from './components/ImportDialog';
 import { KanbanBoard } from './components/KanbanBoard';
@@ -192,6 +193,8 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
       </dl>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <BoardSearch value={p.query.search} onChange={p.setSearch} />
+
         <CheckboxField
           label={<span className="inline-flex items-center gap-1.5">Needs attention <Badge>{board.data.attentionCount}</Badge></span>}
           checked={p.query.attention}

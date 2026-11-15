@@ -11,7 +11,7 @@ beforeEach(() => sessionStorage.clear());
 describe('useBoardParams', () => {
   it('starts empty', () => {
     const { result } = renderHook(() => useBoardParams(), { wrapper: at('/') });
-    expect(result.current.query).toEqual({ teamId: null, attention: false, personId: null, filters: [] });
+    expect(result.current.query).toEqual({ teamId: null, attention: false, personId: null, filters: [], search: '' });
     expect(result.current.taskId).toBeNull();
   });
 

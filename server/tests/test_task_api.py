@@ -109,6 +109,25 @@ def test_filters_and_the_attention_tick_narrow_the_cards_and_say_how_many(direct
     assert everything["stats"]["overdue"] == 1 and ok and late
 
 
+def test_search_finds_a_task_by_part_of_its_title_or_by_its_number(directory, npi):
+    weld = create(directory, npi, title="Design Weld jig")
+    harness = create(directory, npi, title="Wire harness")
+    move(directory, npi, harness, "in_progress")
+
+    def titles(q):
+        return [t["title"] for t in board(directory, npi["asha"], q)["tasks"]]
+
+    assert titles("?q=weld") == ["Design Weld jig"]  # any case, any part of the title
+    assert titles("?q=%20WIRE%20") == ["Wire harness"]  # spaces around it are ignored
+    assert titles(f"?q={weld['number']}") == ["Design Weld jig"]  # the number, bare or with the #
+    assert titles(f"?q=%23{harness['number']}") == ["Wire harness"]
+    assert titles("?q=nothing") == []
+    assert len(titles("?q=")) == 2
+
+    found = board(directory, npi["asha"], "?q=weld")  # the totals and stats follow the search
+    assert found["column_totals"]["todo"] == 1 and found["column_totals"]["in_progress"] == 0 and found["stats"]["todo"] == 1
+
+
 def test_the_person_dropdown_and_an_unknown_filter(directory, npi):
     create(directory, npi, title="Ravi's")
     create(directory, npi, title="Asha's", assignee_id=str(npi["asha"].id))

@@ -208,6 +208,8 @@ export interface BoardQuery {
   attention: boolean;
   personId: string | null;
   filters: BoardFilter[];
+  /** Part of a title, or a task number (33 or #33); empty shows every task. Searched on the server. */
+  search: string;
 }
 
 /** Cards a column shows at first, and how many more each "Load more" fetches. */

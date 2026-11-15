@@ -36,7 +36,7 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard({ ta
       ref={ref}
       role="button"
       tabIndex={0}
-      aria-label={`${task.title}. ${task.status.replace('_', ' ')}`}
+      aria-label={`Task ${task.number}, ${task.title}. ${task.status.replace('_', ' ')}`}
       className={cn(
         'flex cursor-pointer flex-col gap-2.5 rounded-lg border border-l-4 border-line bg-surface p-3 text-left shadow-raised transition-colors',
         PRIORITY_STYLE[task.priority].edge,
@@ -47,7 +47,10 @@ export const TaskCard = forwardRef<HTMLDivElement, Props>(function TaskCard({ ta
       )}
       {...props}
     >
-      <p className={cn('line-clamp-2 min-w-0 text-base font-medium text-ink', done && 'line-through decoration-ink-subtle')}>{task.title}</p>
+      <p className={cn('line-clamp-2 min-w-0 text-base font-medium text-ink', done && 'line-through decoration-ink-subtle')}>
+        <span className="mr-1.5 text-sm font-semibold tabular-nums text-ink-subtle no-underline">#{task.number}</span>
+        {task.title}
+      </p>
 
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <span className={cn('inline-flex items-center rounded-sm border px-1.5 py-px text-xs font-semibold leading-[1.5]', PRIORITY_STYLE[task.priority].tag)}>

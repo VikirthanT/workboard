@@ -145,10 +145,10 @@ describe('admin service', () => {
 describe('tasks service', () => {
   it('sends only the board filters that are set', async () => {
     get.mockResolvedValue({ data: board });
-    await getBoard({ teamId: null, personId: null, attention: false, filters: [] } as never);
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined, limit: 5, show: undefined } });
-    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'] } as never, { todo: 10, done: 15 });
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked', limit: 5, show: 'todo:10,done:15' } });
+    await getBoard({ teamId: null, personId: null, attention: false, filters: [], search: '' } as never);
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined, q: undefined, limit: 5, show: undefined } });
+    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'], search: ' #33 ' } as never, { todo: 10, done: 15 });
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked', q: '#33', limit: 5, show: 'todo:10,done:15' } });
   });
 
   it('reads one task with GET /tasks/{id}', async () => {
