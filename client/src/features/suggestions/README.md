@@ -15,7 +15,9 @@ Built so far: the data layer (below). The page, the header link and the dialogs 
 | `POST /api/suggestions/{id}/reject` | `rejectSuggestion`, `useRejectSuggestion` | Reject (restorable for 3 days) |
 | `POST /api/suggestions/{id}/restore` | `restoreSuggestion`, `useRestoreSuggestion` | Bring back a rejected one |
 
-The admin's channel picker uses `GET /api/standups/channels` (`getStandupChannels`, `features/admin`).
+The channel picker uses `GET /api/standups/channels` (`getStandupChannels`, `features/admin`): the standup app's own channel list, read live from its database, and refreshed after every sync so a newly added channel appears. A typed channel id shows its name through `GET /api/standups/channels/{id}` (`getChannelName`, `useChannelName`).
+
+Who sees what: a manager sees their own team and can sync, tick, edit, reject, restore and add. An admin picks any team from a dropdown and sees it read-only, but may press Sync (to check the standup connection); the server enforces both (`security/authorization.py`, `can_sync_standups`). A person with no post in the last 14 days reads "Standup not found · checked <date>" once a sync has run, "Not synced yet" before.
 
 ## Folder map
 

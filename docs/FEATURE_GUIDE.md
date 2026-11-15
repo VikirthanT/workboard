@@ -33,7 +33,8 @@ One team has one manager, a manager runs one team, a person is on at most one te
 | Team report | Per person and in total, for a chosen period; CSV and PDF export; an all-teams report | Built |
 | My team / Teams portal | Managers manage their people; admins manage teams, managers, admins; every change is audited with a reason | Built |
 | Audit log | Append-only record (the database refuses edits) of team, membership, admin, sign-in, task delete and reassign changes | Built |
-| Standup suggestions | The team's standup channel is read, a language model proposes tasks, the manager edits, rejects or adds them; nothing reaches the board without the manager | Built, reads another team's standup database read-only |
+| Standup suggestions | The team's standup channel is read, a language model proposes tasks, the manager edits, rejects or adds them; nothing reaches the board without the manager. Synced automatically at the times set in `STANDUP_SYNC_SCHEDULE` (the `scheduler` service); a person with no post reads "Standup not found". An admin can open any team's suggestions read-only and press Sync to check the connection | Built, reads another team's standup database read-only |
+| Pull from Slack | A button on the team page lists everyone in the team's Slack channel who is in the directory; the manager (own team) or an admin (any team) ticks who joins and confirms. The dialog says when the channel is not set, cannot be found, or the bot is not in it | Built |
 | Slack bot | Assignee gets a DM card with status dropdown and Comment button; manager and assignee comments and every status move appear in the card's thread, **with a teal bar for the manager and a grey bar for the assignee**; a Home tab lists open tasks with created date and time | Built, not tried against a real workspace |
 | Slack channel announcement | After a bulk upload or a standup batch: one line per person (`@name - N tasks`) and a PDF with the details | Built |
 | Dark and light themes | Follows the AtiUI design system | Built |
@@ -97,6 +98,8 @@ How it works: the session token is an HMAC-signed token (`SECRET_KEY`, at least 
 | `PATCH /teams/{id}/manager` | command | Replace the manager; the old one stays as a member (admin) |
 | `PATCH /teams/{id}/standup-channel` | command | Set or clear the standup channel (admin or that manager) |
 | `DELETE /teams/{id}` | command | Erase a team for good; body repeats its name and a reason (admin) |
+| `GET /teams/{id}/channel-members` | query | Who is in the team's Slack channel and in the directory, with what adding each would do (admin or that manager); says why when the channel is not set, not found, or the bot is not in it |
+| `POST /teams/{id}/members/bulk` | command | Add the ticked people together, all or none, one audit row each (admin or that manager) |
 | `POST /teams/{id}/members`, `DELETE /teams/{id}/members/{person_id}` | command | Add a person with no team / remove one (admin or that manager); the manager cannot be removed |
 | `PATCH /people/{id}/admin` | command | Make or revoke admin; the last active admin cannot be revoked |
 | `GET /dev/accounts` | query | Dev sign-in list; 404 unless `DEV_AUTH` is on |
@@ -125,9 +128,10 @@ Not HTTP, but commands the Slack side uses: `move_task_as_assignee` (up to Revie
 
 | Endpoint | Kind | What it does |
 | --- | --- | --- |
-| `GET /standups/channels` | query | Channels in the standup database (admin or manager) |
+| `GET /standups/channels` | query | Channels in the standup database, read live (admin or manager) |
+| `GET /standups/channels/{channel_id}` | query | The name of a channel id: the standup database first, then Slack (admin or manager) |
 | `GET /teams/{id}/suggestions` | query | Each person's last standup and their suggestions |
-| `POST /teams/{id}/suggestions/sync?person_id=` | command | Reads the channel (last 14 days), asks the language model, stores suggestions; runs inside the request |
+| `POST /teams/{id}/suggestions/sync?person_id=` | command | Reads the channel (last 14 days), asks the language model, stores suggestions; runs inside the request. The team's manager, or any admin (to check the connection); the rest stays with the manager |
 | `PATCH /suggestions/{id}`, `POST .../reject`, `POST .../restore` | command | Edit, reject, bring back (restorable for 3 days) |
 | `POST /teams/{id}/suggestions/add` | command | Create a task from each chosen suggestion, all or nothing |
 

@@ -20,6 +20,8 @@ Rules in one paragraph: the directory (people) comes from Slack. A person has a 
 | `DELETE /api/teams/{id}` | admin | `routers/teams.py` | Delete a team for good. Body `{confirm_name, reason}`. Members go back to no team; the manager returns to member. Returns 204. |
 | `PATCH /api/teams/{id}/manager` | admin | `routers/teams.py` | Make another person the manager; the old one becomes a member and stays on the team. Body `{person_id, reason}`. |
 | `GET /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | People on the team, manager first. Each person carries `open_task_count`: the tasks assigned to them that are not Done (one grouped query, `members.open_task_counts`). It is `null` on every other endpoint that returns a person. The remove dialog warns with it. |
+| `GET /api/teams/{id}/channel-members` | admin, or that team's manager | `routers/teams.py` | A query: who is in the team's Slack channel (its standup channel) and in the directory, for the "Pull from Slack" review. Each person has a `state`: `available`, `on_this_team`, `on_other_team` (with `team_name`) or `unavailable` (inactive, or a manager); `not_in_directory` counts the Slack members the directory does not know. Asks Slack with the bot token (`conversations.members`); a private channel needs the bot invited. Errors say what is wrong: 409 `standup_channel_not_set`, 404 `channel_not_found`, 409 `bot_not_in_channel`, 501 `slack_not_configured`, 502 `slack_failed`. |
+| `POST /api/teams/{id}/members/bulk` | admin, or that team's manager | `routers/teams.py` | A command: add the ticked people together. Body `{person_ids (1 to 200), reason}`, reason optional. All or none: the first person who is inactive, on a team or a manager stops it with nothing added (409, the message names them). One audit row per person. Returns the people added. |
 | `POST /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | Add a person who is on no team. Body `{person_id, reason}`; the reason is optional. Returns 201. |
 | `DELETE /api/teams/{id}/members/{person_id}` | admin, or that team's manager | `routers/teams.py` | Take a person off the team (the dustbin). Optional body `{reason}`. The manager cannot be removed. Returns 204. |
 
@@ -43,10 +45,11 @@ Every failure is `{"detail": {"code", "message"}}`; match on `code`.
 | --- | --- |
 | 401 | `not_authenticated` |
 | 403 | `domain_not_allowed`, `not_onboarded`, `forbidden` |
-| 404 | `team_not_found`, `person_not_found`, `not_on_team` |
+| 404 | `team_not_found`, `person_not_found`, `not_on_team`, `channel_not_found` |
 | 409 | `team_name_taken`, `person_inactive`, `already_manager`, `already_on_team`, `same_manager`, `person_unavailable`, `is_manager`, `admin_unchanged`, `last_admin` |
 | 422 | `reason_required`, `reason_too_long`, `name_required`, `confirmation_mismatch`, `invalid_input` (text the database cannot store, such as a NUL character; any endpoint, nothing is written). A malformed body, id or paging value is also 422, but in FastAPI's own shape (`detail` is a list), not `{code, message}`. |
-| 501 | `auth_not_configured` |
+| 501 | `auth_not_configured`, `slack_not_configured` |
+| 502 | `slack_failed` |
 
 ## Folder map
 
@@ -60,7 +63,8 @@ server/identity/
 ├── services/
 │   ├── lookup.py          get_team / get_person (queries, 404 if missing)
 │   ├── teams.py           list_teams, get_team_with_count; create_team, change_manager, delete_team
-│   ├── members.py         list_members, get_member; add_member, remove_member
+│   ├── members.py         list_members, get_member; add_member, add_members, remove_member
+│   ├── channel_members.py list_channel_members (a query: the team's Slack channel matched to the directory)
 │   ├── admin_access.py    set_admin
 │   ├── directory.py       search_people (the picker, one page + total)
 │   ├── dev_accounts.py    list_dev_accounts (the dev login's list)
