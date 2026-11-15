@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from core.exceptions import AppError
 from database.config import SessionLocal
-from models import Person, Task, TaskActivity, Team
+from models import Person, Task
 from security.authorization import assignee_transitions_for, can_assignee_comment
 from slack import blocks
 from slack.services import dm, home
@@ -110,21 +110,7 @@ def details_view(slack_user_id: str, task_id: str) -> tuple[dict | None, str | N
             return None, NOT_FOUND
         if task is None or task.assignee_id != person.id:
             return None, "That task could not be found."
-        entries = list(db.scalars(
-            select(TaskActivity).where(TaskActivity.task_id == task.id).order_by(TaskActivity.created_at.desc()).limit(blocks.THREAD_MAX_ENTRIES)
-        ))[::-1]  # the newest few, shown oldest first
-        names = {p.id: p.name for p in db.scalars(select(Person).where(Person.id.in_({e.actor_id for e in entries if e.actor_id})))}
-        manager_id = team.manager_id if (team := db.get(Team, task.team_id)) else None
-
-        def role(actor_id) -> str:  # the same three roles the DM thread labels
-            if actor_id is None:
-                return ""
-            return "you" if actor_id == task.assignee_id else "manager" if actor_id == manager_id else "admin"
-
-        thread = [
-            (names.get(e.actor_id, "Someone"), role(e.actor_id), e.kind, e.field, e.old_value, e.new_value, e.note, e.source, e.created_at)
-            for e in entries
-        ]
+        thread, _ = dm.thread_entries(db, task, limit=blocks.THREAD_MAX_ENTRIES, you=person.id)  # the newest few, oldest first
         return blocks.task_detail_modal(task, thread, can_assignee_comment(person, task)), None
 
 

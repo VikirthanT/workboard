@@ -553,3 +553,199 @@ def test_the_listener_builds_offline_and_stays_quiet_without_tokens(capsys):
     listener.main()  # no tokens in the tests
 
     assert "Slack listener not started" in capsys.readouterr().out
+
+
+# ---- reassignment: the new assignee's card, with what was already said ----
+
+@pytest.fixture
+def omar(directory, db, world):
+    """A second person with a real-looking Slack id, on the team."""
+    person = directory.person("Omar")
+    person.slack_user_id = "U0OMAR5678"
+    db.commit()
+    directory.call(world["asha"], "POST", f"/teams/{world['team_id']}/members", json={"person_id": str(person.id)})
+    db.expire_all()
+    return person
+
+
+def reassign(world, task, who):
+    return world["directory"].call(world["asha"], "PATCH", f"/tasks/{task['id']}", json={"assignee_id": str(who.id)})
+
+
+def comment_on_board(world, task, text):
+    res = world["directory"].call(world["asha"], "POST", f"/tasks/{task['id']}/comments", json={"body": text})
+    assert res.status_code == 201, res.text
+
+
+def message_text(post):
+    """Every piece of text in a posted message's blocks."""
+    out = []
+    for block in post["blocks"]:
+        if block.get("text"):
+            out.append(block["text"]["text"])
+        out += [e["text"] for e in block.get("elements", []) if e.get("type") == "mrkdwn"]
+    return "\n".join(out)
+
+
+def test_a_reassigned_task_gives_the_new_assignee_a_card_and_closes_the_old_one(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    assert slack["opened"] == ["U0RAVI1234"]
+
+    res = reassign(world, task, omar)
+
+    assert res.status_code == 200
+    old, new = dms(db)
+    assert (old.person_id, old.status, old.replaced_at is not None) == (world["ravi"].id, "sent", True)
+    assert (new.person_id, new.status, new.replaced_at, new.reassigned_by) == (omar.id, "sent", None, world["asha"].id)
+    assert slack["opened"] == ["U0RAVI1234", "U0OMAR5678"]
+    card = slack["posted"][1]  # the first post of the new assignee's DM is the card itself
+    assert card["channel"] == "D-U0OMAR5678" and card["thread_ts"] is None and "Design weld jig" in card["text"]
+    assert blocks.STATUS_ACTION in control_ids(card["blocks"]) and selected(card["blocks"]) == "To Do"  # theirs to move
+    closed = slack["updated"][-1]
+    assert (closed["channel"], closed["ts"]) == ("D-U0RAVI1234", old.message_ts)
+    assert control_ids(closed["blocks"]) == [] and "Reassigned to Omar" in message_text(closed)  # no buttons, and who has it now
+
+
+def test_the_new_assignee_gets_what_was_already_said_and_done_under_their_card(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    comment_on_board(world, task, "Please use the new drawing.")
+    interactions.move("U0RAVI1234", task["id"], "in_progress", None)
+    interactions.move("U0RAVI1234", task["id"], "blocked", "Waiting on parts")
+
+    reassign(world, task, omar)
+
+    _, new = dms(db)
+    handover = slack["posted"][-1]
+    assert (handover["channel"], handover["thread_ts"]) == ("D-U0OMAR5678", new.message_ts)  # in the new thread, under the new card
+    text = message_text(handover)
+    assert "*Asha* reassigned this task to you." in text and "Earlier on this task" in text  # the name in bold, as Slack shows it
+    assert "Please use the new drawing." in text and "Moved it to *In Progress*" in text and "> Waiting on parts" in text
+    assert "*Asha* · manager" in text and "*Ravi* · previous assignee" in text  # who said it, never "you" for the earlier assignee
+    assert "· you" not in text
+    assert [m.ts for m in db.scalars(select(SlackDmMessage).where(SlackDmMessage.dm_id == new.id))] == [handover_ts(slack)]  # kept for clean-up
+
+
+def handover_ts(slack):
+    return f"1700000000.{len(slack['posted']):06d}"
+
+
+def test_what_is_said_after_the_reassignment_goes_to_the_new_thread_and_the_old_card_stays_closed(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    reassign(world, task, omar)
+    _, new = dms(db)
+    closed_updates = len(slack["updated"])
+
+    comment_on_board(world, task, "Over to you, Omar.")
+    world["directory"].call(world["asha"], "POST", f"/tasks/{task['id']}/status", json={"to": "in_progress"})
+
+    thread_post = next(p for p in slack["posted"] if "Over to you, Omar." in message_text(p))
+    assert (thread_post["channel"], thread_post["thread_ts"]) == ("D-U0OMAR5678", new.message_ts)
+    assert all(u["channel"] == "D-U0OMAR5678" for u in slack["updated"][closed_updates:])  # a move redraws the new card, not the old one
+    assert not any(p["channel"] == "D-U0RAVI1234" and p["thread_ts"] for p in slack["posted"] if "Over to you" in message_text(p))
+
+
+def test_the_old_assignee_can_no_longer_move_the_task_from_the_old_card(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    reassign(world, task, omar)
+
+    problem = interactions.move("U0RAVI1234", task["id"], "in_progress", None)
+
+    assert problem is not None
+    assert db.get(Task, uuid.UUID(task["id"])).status == "todo"
+
+
+def test_a_task_reassigned_twice_hands_over_the_whole_story_and_each_old_card_names_who_took_it(db, world, slack, omar, directory):
+    zoe = directory.person("Zoe")
+    zoe.slack_user_id = "U0ZOE91011"
+    db.commit()
+    directory.call(world["asha"], "POST", f"/teams/{world['team_id']}/members", json={"person_id": str(zoe.id)})
+    db.expire_all()
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    reassign(world, task, omar)
+    interactions.comment("U0OMAR5678", task["id"], "Started on the fixture.")
+
+    reassign(world, task, zoe)
+
+    first, second, third = dms(db)
+    assert [r.replaced_at is None for r in (first, second, third)] == [False, False, True]
+    handover = message_text(slack["posted"][-1])
+    assert slack["posted"][-1]["channel"] == "D-U0ZOE91011" and "Started on the fixture." in handover
+    assert "*Omar* · previous assignee" in handover
+    names = {u["channel"]: message_text(u) for u in slack["updated"] if "Reassigned to" in message_text(u)}
+    assert "Reassigned to Zoe" in names["D-U0OMAR5678"]  # Omar's card names Zoe
+    assert "Reassigned to Omar" in names["D-U0RAVI1234"]  # Ravi's card was not rewritten with Zoe's name
+
+
+def test_reassigning_to_someone_with_no_real_slack_id_closes_the_old_card_and_sends_nothing_new(db, world, slack):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    posted = len(slack["posted"])
+
+    reassign(world, task, world["meena"])  # a made-up Slack id: Meena gets no DM
+
+    old, = dms(db)
+    assert old.replaced_at is not None
+    assert len(slack["posted"]) == posted and slack["opened"] == ["U0RAVI1234"]
+    assert "Reassigned to Meena" in message_text(slack["updated"][-1])
+
+
+def test_a_card_that_was_never_sent_is_dropped_and_only_the_new_assignee_gets_one(db, world, slack, omar):
+    slack["fail"] = SlackError("Slack is down")
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    assert [r.status for r in dms(db)] == ["pending"]
+    slack["fail"] = None
+
+    reassign(world, task, omar)
+
+    old, new = dms(db)
+    assert (old.status, old.replaced_at is not None) == ("failed", True)  # Ravi never had a card, and never will
+    assert (new.person_id, new.status) == (omar.id, "sent")
+    assert slack["opened"] == ["U0OMAR5678"]
+
+
+def test_a_new_card_that_cannot_be_sent_is_tried_again_and_the_handover_follows_it(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    comment_on_board(world, task, "Please use the new drawing.")
+    slack["fail"] = SlackError("Slack is down")
+
+    reassign(world, task, omar)
+    _, new = dms(db)
+    assert (new.status, new.attempts) == ("pending", 1)
+
+    slack["fail"] = None
+    dm.send_pending(world["team_id"])
+
+    _, new = dms(db)
+    assert new.status == "sent"
+    assert "Please use the new drawing." in message_text(slack["posted"][-1])  # the hand-over came with the retried card
+
+
+def test_a_long_story_is_cut_to_the_latest_ten_entries_and_says_how_many_are_left_out(db, world, slack, omar):
+    task = create(world, "Design weld jig", world["ravi"]).json()
+    for n in range(12):
+        comment_on_board(world, task, f"Comment number {n:02d}")
+
+    reassign(world, task, omar)
+
+    text = message_text(slack["posted"][-1])
+    assert "Comment number 11" in text and "Comment number 00" not in text
+    assert "3 earlier entries are not shown" in text  # 12 comments and the reassignment make 13; ten are shown
+
+
+def test_nothing_is_queued_when_slack_is_not_set_up(db, world, monkeypatch, omar):
+    monkeypatch.setattr(settings, "slack_bot_token", "")
+    task = create(world, "Design weld jig", world["ravi"]).json()
+
+    assert reassign(world, task, omar).status_code == 200
+
+    assert dms(db) == []
+
+
+def test_the_handover_and_the_closed_card_read_well_with_and_without_history():
+    task = Task(number=7, title="Design weld jig", priority="medium", status="todo")
+
+    text, empty = blocks.handover("Asha", [], 0)
+    assert text == "Asha reassigned this task to you"
+    assert "Nothing has been said on it yet." in message_text({"blocks": empty})
+
+    closed_text, closed = blocks.reassigned_card(task, "Omar")
+    assert control_ids(closed) == [] and "Task #7" in closed_text and "Reassigned to Omar" in message_text({"blocks": closed})

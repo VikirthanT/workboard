@@ -24,16 +24,22 @@ class SlackDmMessage(Base):
 
 
 class SlackDm(Base):
-    """The DM card a task's assignee got in Slack. One per task: created pending with the task (like the channel
-    announcement), sent afterwards, then its `dm_channel` and `message_ts` say which message to update when the task's
-    status changes on either side. Only queued for assignees with a real Slack id, and only when Slack is set up."""
+    """A DM card a task's assignee got in Slack: created pending with the task (like the channel announcement), sent
+    afterwards, then its `dm_channel` and `message_ts` say which message to update when the task's status changes on
+    either side. Only queued for assignees with a real Slack id, and only when Slack is set up. A task has one live card
+    at a time: a reassignment marks the old card `replaced_at` (it is closed with a note) and queues a new one for the new
+    assignee, whose thread starts with what was already on the task (`reassigned_by` is who moved it)."""
 
     __tablename__ = "slack_dms"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
-    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), unique=True)
-    # Who the card was sent to (the assignee when it was created); a reassignment later does not move the old card.
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    # Who the card was sent to: the assignee when it was queued.
     person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
+    # Set when the task moved to someone else: this card is no longer the live one. NULL on the live card.
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # On a card made by a reassignment: the person who reassigned the task. NULL on a card made with the task.
+    reassigned_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("people.id", ondelete="SET NULL"))
     status: Mapped[str] = mapped_column(String, default="pending", server_default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_error: Mapped[str | None] = mapped_column(String)
@@ -45,6 +51,7 @@ class SlackDm(Base):
     __table_args__ = (
         CheckConstraint("status in ('pending', 'sent', 'failed')", name="ck_slack_dms_status"),
         Index("ix_slack_dms_status", "status"),
+        Index("uq_slack_dms_live_task", "task_id", unique=True, postgresql_where=text("replaced_at IS NULL")),  # one live card per task
     )
 
 

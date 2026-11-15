@@ -19,7 +19,7 @@ from models import Person
 from security.authentication import get_current_person
 from slack.services import announce, dm
 from tasks import schemas
-from tasks.services import commands, queries
+from tasks.services import commands, lookup, queries
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -76,12 +76,20 @@ def update_task(
     Who: the manager of the task's team.
     Body: send only what changes. A field you leave out stays as it is; `due_at: null` clears the date; a null
     title, priority, description or assignee is ignored. Status is not editable here: use `/status`.
-    Each field that really changed becomes one entry on the timeline (a new assignee is a "reassign" entry).
+    Each field that really changed becomes one entry on the timeline (a new assignee is a "reassign" entry). When Slack is set
+    up, a new assignee also gets a DM card with the task's earlier comments and moves under it, and the old assignee's card is
+    closed with a note of who has the task now.
     Errors: 409 `task_done` (a finished task cannot be reassigned, but can be edited), 422 `invalid_assignee`,
     422 `title_required`, 404 `task_not_found`.
     """
-    commands.update_task(db, actor, task_id, body.model_dump(exclude_unset=True))
-    background.add_task(dm.refresh_card, task_id)
+    changes = body.model_dump(exclude_unset=True)
+    was_with = lookup.get_task(db, task_id).assignee_id
+    commands.update_task(db, actor, task_id, changes)
+    if changes.get("assignee_id") not in (None, was_with):
+        # Someone new has it: their card (with what was already said, under it), the old card closed, both Home tabs redrawn.
+        background.add_task(dm.after_reassign, task_id, was_with)
+    else:
+        background.add_task(dm.refresh_card, task_id)
     return queries.get_task(db, actor, task_id)
 
 

@@ -100,6 +100,27 @@ def card(task: Task, assignee: Person, reviewer_note: tuple[str, str] | None = N
     return f"{task_code(task)} {task.title} ({status})", blocks
 
 
+def reassigned_card(task: Task, new_assignee: str) -> tuple[str, list[dict]]:
+    """The old assignee's card once the task is someone else's: the title, who has it now, and no controls."""
+    section = {"type": "section", "text": {"type": "mrkdwn", "text": f"*{task_code(task)}*  {escape(task.title)}"}}
+    note = _note(f"Reassigned to {escape(new_assignee)}. It is no longer yours, so there is nothing to do here.")
+    return f"{task_code(task)} {task.title} (reassigned to {new_assignee})", [section, note]
+
+
+def handover(by: str, history: list[tuple], hidden: int = 0) -> tuple[str, list[dict]]:
+    """The first message in the new assignee's thread: who reassigned the task to them, then what was already said and done
+    on it, oldest first (the same lines as the Details popup). `hidden` is how many earlier entries are not shown."""
+    blocks: list[dict] = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{escape(by)}* reassigned this task to you."}}]
+    if history:
+        blocks += [{"type": "divider"}, {"type": "section", "text": {"type": "mrkdwn", "text": "*Earlier on this task*"}}]
+        blocks += [{"type": "section", "text": {"type": "mrkdwn", "text": _thread_entry(*entry)[:2900]}} for entry in history]
+        if hidden:
+            blocks.append(_note(f"{hidden} earlier {'entry is' if hidden == 1 else 'entries are'} not shown. Open the task in the Workboard for all of it."))
+    else:
+        blocks.append(_note("Nothing has been said on it yet."))
+    return f"{by} reassigned this task to you", blocks
+
+
 def _controls(task: Task, assignee: Person) -> list[dict]:
     """What the assignee may do to the task: the status dropdown and the Comment button, each only while the server allows it."""
     controls: list[dict] = []

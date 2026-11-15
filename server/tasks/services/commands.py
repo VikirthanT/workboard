@@ -185,6 +185,7 @@ def update_task(db: Session, actor: Person, task_id: uuid.UUID, changes: dict, t
             },
         )
         task.assignee_id = new_assignee.id
+        dm.record_reassignment(db, task, new_assignee, actor)  # the old card is retired and the new assignee's card queued, with this commit
     db.commit()
 
 
