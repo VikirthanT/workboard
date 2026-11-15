@@ -28,7 +28,7 @@ def test_production_api_is_hardened():
 def test_every_production_service_drops_all_capabilities_and_cannot_gain_privileges():
     compose = (ROOT / "docker-compose.yml").read_text()
     services = re.findall(r"^  (\w+):\n(.*?)(?=^  \w|^volumes:)", compose, re.S | re.M)
-    assert {name for name, _ in services} == {"db", "server", "slack", "frontend", "nginx"}  # a new service must be added here
+    assert {name for name, _ in services} == {"db", "server", "slack", "scheduler", "frontend", "nginx"}  # a new service must be added here
     for name, body in services:
         assert "cap_drop: [ALL]" in body, f"{name} keeps Linux capabilities it does not need"
         assert "no-new-privileges:true" in body, f"{name} can gain privileges"
@@ -42,6 +42,16 @@ def test_every_production_service_drops_all_capabilities_and_cannot_gain_privile
 def _service(name: str) -> str:
     compose = (ROOT / "docker-compose.yml").read_text()
     return re.search(rf"^  {name}:\n(.*?)(?=^  \w|^volumes:)", compose, re.S | re.M).group(1)
+
+
+def test_make_prod_up_starts_the_standup_scheduler_with_the_apis_image_and_the_schedule_but_no_slack_tokens():
+    scheduler = _service("scheduler")
+    assert "image: workboard-server" in scheduler and 'command: ["python", "-m", "standups.scheduler"]' in scheduler
+    assert 'DEV_AUTH: "false"' in scheduler and not re.search(r"^\s*env_file:", scheduler, re.M)
+    for setting in ("STANDUP_SYNC_SCHEDULE", "STANDUP_DB_URL", "LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY"):
+        assert f"{setting}: ${{{setting}:-}}" in scheduler, f"the scheduler is not given {setting}"
+    assert "SLACK_" not in scheduler  # it never posts to Slack
+    assert "/opt/standup-bot:ro" in scheduler  # the standup database, read only
 
 
 def test_make_prod_up_starts_the_slack_listener_with_the_apis_image_and_its_own_tokens():

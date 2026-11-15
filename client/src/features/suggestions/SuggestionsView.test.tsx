@@ -6,6 +6,8 @@ import { SuggestionsView } from './SuggestionsView';
 
 const h = vi.hoisted(() => ({
   me: undefined as unknown,
+  teams: [] as unknown[],
+  suggestionsFor: vi.fn(),
   page: {} as Record<string, unknown>,
   sync: vi.fn(),
   reject: vi.fn(),
@@ -13,8 +15,9 @@ const h = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 vi.mock('../../hooks', () => ({ useCurrentUser: () => ({ data: h.me }) }));
+vi.mock('../admin', () => ({ useTeams: () => ({ data: h.teams, isError: false }) }));
 vi.mock('./hooks', () => ({
-  useSuggestions: () => h.page,
+  useSuggestions: (teamId: string) => { h.suggestionsFor(teamId); return h.page; },
   useSyncSuggestions: () => ({ mutate: h.sync, isPending: false }),
   useRejectSuggestion: () => ({ mutate: h.reject, isPending: false }),
   useRestoreSuggestion: () => ({ mutate: h.restore, isPending: false }),
@@ -56,6 +59,45 @@ beforeEach(() => {
   h.me = manager;
   h.page = loaded([asha, ravi, divya]);
   Object.values(h).forEach((v) => typeof v === 'function' && (v as ReturnType<typeof vi.fn>).mockReset?.());
+});
+
+describe('SuggestionsView for an admin', () => {
+  const teams = [
+    { id: 't1', name: 'NPI', manager: { id: 'm1', displayName: 'Asha Rao' }, memberCount: 3, standupChannelId: 'C0NPI' },
+    { id: 't2', name: 'Validation', manager: { id: 'm2', displayName: 'Omar Khan' }, memberCount: 2, standupChannelId: 'C0VAL' },
+  ];
+  const admin = { isManager: false, isAdmin: true, team: null, user: { id: 'a1' } };
+
+  it('reads any team: starts on the first, offers every team, can sync it, and shows no other action', () => {
+    h.me = admin;
+    h.teams = teams;
+    render(<SuggestionsView />);
+
+    expect(h.suggestionsFor).toHaveBeenLastCalledWith('t1');
+    expect(screen.getByRole('combobox', { name: 'Team' })).toHaveTextContent('NPI (Asha Rao)');
+    expect(screen.getByText(/Read-only view of NPI/)).toBeInTheDocument();
+    expect(screen.getByText('Design weld jig')).toBeInTheDocument(); // the suggestions are there to read
+    expect(screen.getByRole('button', { name: /Sync now/ })).toBeEnabled(); // an admin may sync, to check the connection
+    expect(screen.queryByRole('button', { name: /^Add \(/ })).not.toBeInTheDocument();
+    for (const name of ['Select', 'Edit', 'Reject', 'Restore']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+  });
+
+  it('can still act on the team the admin runs themselves', () => {
+    h.me = { isManager: true, isAdmin: true, team: { id: 't2', name: 'Validation' }, user: { id: 'm2' } };
+    h.teams = teams;
+    render(<SuggestionsView />);
+
+    expect(h.suggestionsFor).toHaveBeenLastCalledWith('t2'); // their own team first
+    expect(screen.getByRole('button', { name: /Sync now/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add (0)' })).toBeInTheDocument();
+  });
+
+  it('says so when there are no teams yet', () => {
+    h.me = admin;
+    h.teams = [];
+    render(<SuggestionsView />);
+    expect(screen.getByText('No teams yet')).toBeInTheDocument();
+  });
 });
 
 describe('SuggestionsView', () => {
@@ -117,8 +159,16 @@ describe('SuggestionsView', () => {
     expect(within(row('Ravi')).getByText('Late reply')).toBeInTheDocument();
     expect(within(row('Ravi')).getByText('Has a blocker')).toBeInTheDocument();
     expect(within(row('Asha')).queryByText('Late reply')).not.toBeInTheDocument();
-    expect(within(row('Divya')).getByText('No standup this week')).toBeInTheDocument();
+    expect(within(row('Divya')).getByText(/^Standup not found · checked 13 Nov/)).toBeInTheDocument(); // a sync has run and found nothing
     expect(screen.getByText(/Last sync 13 Nov/)).toBeInTheDocument();
+  });
+
+  it('does not call anyone\'s standup not found before the first sync', () => {
+    h.page = loaded([asha, ravi, divya], { lastSyncedAt: null });
+    render(<SuggestionsView />);
+    const list = within(screen.getByRole('navigation', { name: 'Team members' }));
+    expect(within(list.getByRole('button', { name: /Divya/ })).getByText('Not synced yet')).toBeInTheDocument();
+    expect(screen.queryByText(/Standup not found/)).not.toBeInTheDocument();
   });
 
   it('opens on the first person with suggestions waiting, and switching shows the other person\'s standup', async () => {

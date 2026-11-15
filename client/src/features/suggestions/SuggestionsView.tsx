@@ -6,9 +6,11 @@ import { Button } from '../../app/components/ui/button';
 import { EmptyState } from '../../app/components/ui/empty-state';
 import { useToast } from '../../app/components/ui/toast';
 import { formatDateTime } from '../../app/lib/format';
-import type { Suggestion } from '../../app/types/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../app/components/ui/select';
+import type { Me, Suggestion, TeamRecord } from '../../app/types/types';
 import { useCurrentUser } from '../../hooks';
 import { errorMessage } from '../../services/api';
+import { useTeams } from '../admin';
 import { AddSuggestionsDialog } from './AddSuggestionsDialog';
 import { EditSuggestionDialog } from './EditSuggestionDialog';
 import { MemberList } from './MemberList';
@@ -16,16 +18,49 @@ import { StandupBlocks } from './StandupBlocks';
 import { SuggestionCard } from './SuggestionCard';
 import { useRejectSuggestion, useRestoreSuggestion, useSuggestions, useSyncSuggestions } from './hooks';
 
+/** "NPI (Asha Rao)": the team, then the manager who runs it. */
+const teamOption = (t: TeamRecord) => `${t.name} (${t.manager?.displayName ?? 'No manager'})`;
+
 /**
- * The manager's Suggestions page: the team's people down the left; for the chosen person, what they posted in the
- * standup and the tasks proposed from it. Tick the ones you want and Add creates them as tasks; nothing is on the board
- * until then. The server decides what may be done (this page only shows what it returns).
+ * Who sees which team's suggestions: a manager their own team (and may act on it); an admin any team, picked from a
+ * dropdown, read-only unless it is the team they run. The server decides what may be done; this only picks the team.
  */
 export function SuggestionsView() {
   const { data: me } = useCurrentUser();
-  const teamId = me?.team?.id;
-  const page = useSuggestions(teamId, !!me?.isManager);
-  const sync = useSyncSuggestions(teamId ?? '');
+  const teams = useTeams(!!me?.isAdmin);
+  const [pickedTeam, setPickedTeam] = useState<string>();
+
+  if (!me) return <PageLoading />;
+  if (!me.isManager && !me.isAdmin) {
+    return <div className="mx-auto max-w-[720px] p-8"><Alert variant="info" title="Suggestions are for team managers">Only the manager of a team (or an admin, read-only) sees the tasks suggested from its standups.</Alert></div>;
+  }
+  const ownTeamId = me.isManager ? me.team?.id : undefined;
+  const teamId = me.isAdmin ? pickedTeam ?? ownTeamId ?? teams.data?.[0]?.id : ownTeamId;
+  if (!teamId) {
+    if (me.isAdmin && teams.isError) return <div className="mx-auto max-w-[720px] p-8"><Alert variant="danger" title="Could not load teams">{errorMessage(teams.error)}</Alert></div>;
+    if (me.isAdmin && !teams.data) return <PageLoading label="Loading teams…" />;
+    return <div className="mx-auto max-w-[720px] p-8"><EmptyState icon={ListChecks} title={me.isAdmin ? 'No teams yet' : 'No team yet'} description={me.isAdmin ? 'Create a team in the Teams portal first.' : 'You do not run a team yet.'} /></div>;
+  }
+  return <SuggestionsPage key={teamId} me={me} teamId={teamId} canAct={teamId === ownTeamId} teams={me.isAdmin ? teams.data : undefined} onTeam={setPickedTeam} />;
+}
+
+interface PageProps {
+  me: Me;
+  teamId: string;
+  /** The caller runs this team: they can sync, tick, edit, reject, restore and add. Otherwise the page only reads. */
+  canAct: boolean;
+  /** An admin's team dropdown; left out for a manager. */
+  teams?: TeamRecord[];
+  onTeam: (teamId: string) => void;
+}
+
+/**
+ * One team's Suggestions: its people down the left; for the chosen person, what they posted in the standup and the
+ * tasks proposed from it. Tick the ones you want and Add creates them as tasks; nothing is on the board until then.
+ */
+function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
+  const page = useSuggestions(teamId);
+  const sync = useSyncSuggestions(teamId);
   const reject = useRejectSuggestion();
   const restore = useRestoreSuggestion();
   const { toast } = useToast();
@@ -33,11 +68,8 @@ export function SuggestionsView() {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [editing, setEditing] = useState<Suggestion | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const teamName = teams?.find((t) => t.id === teamId)?.name;
 
-  if (!me) return <PageLoading />;
-  if (!me.isManager || !teamId) {
-    return <div className="mx-auto max-w-[720px] p-8"><Alert variant="info" title="Suggestions are for team managers">Only the manager of a team reviews the tasks suggested from its standups.</Alert></div>;
-  }
   if (page.isError) return <div className="mx-auto max-w-[720px] p-8"><Alert variant="danger" title="Could not load suggestions">{errorMessage(page.error)}</Alert></div>;
   if (!page.data) return <PageLoading label="Loading suggestions…" />;
 
@@ -63,10 +95,20 @@ export function SuggestionsView() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Suggestions</h1>
-          <p className="mt-0.5 text-base text-ink-muted">Tasks found in the standup notes. Tick the ones you want, then review them with Add.</p>
+          <p className="mt-0.5 text-base text-ink-muted">
+            {canAct ? 'Tasks found in the standup notes. Tick the ones you want, then review them with Add.' : `Read-only view${teamName ? ` of ${teamName}` : ''}. You can sync it to check the standup connection; only the team’s manager reviews and adds the suggestions.`}
+          </p>
           <p className="mt-1 text-sm text-ink-subtle">{lastSyncedAt ? `Last sync ${formatDateTime(lastSyncedAt)}` : 'Not synced yet'}</p>
         </div>
         <div className="flex items-center gap-2">
+          {teams && (
+            <div className="w-[300px]">
+              <Select value={teamId} onValueChange={onTeam}>
+                <SelectTrigger aria-label="Team" className="py-2"><SelectValue /></SelectTrigger>
+                <SelectContent>{teams.map((t) => <SelectItem key={t.id} value={t.id}>{teamOption(t)}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
           <Button
             variant="outline"
             disabled={sync.isPending || !standupChannelId}
@@ -74,7 +116,7 @@ export function SuggestionsView() {
           >
             <ArrowsClockwise size={14} aria-hidden />{sync.isPending ? 'Syncing…' : 'Sync now'}
           </Button>
-          <Button disabled={live.size === 0} onClick={() => setReviewing(true)}>Add ({live.size})</Button>
+          {canAct && <Button disabled={live.size === 0} onClick={() => setReviewing(true)}>Add ({live.size})</Button>}
         </div>
       </div>
 
@@ -98,7 +140,7 @@ export function SuggestionsView() {
         <EmptyState icon={ListChecks} title="No one on the team yet" description="Add people to the team first; suggestions come from their standup posts." />
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <MemberList people={people} selectedPersonId={current.person.id} meId={me.user.id} ticked={live} onSelect={setPersonId} />
+          <MemberList people={people} selectedPersonId={current.person.id} meId={me.user.id} lastSyncedAt={lastSyncedAt} ticked={live} onSelect={setPersonId} />
           <div className="flex min-w-0 flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-md font-semibold text-ink">{current.person.displayName}{current.person.id === me.user.id && <span className="font-normal text-ink-subtle"> (you)</span>}</h2>
@@ -123,6 +165,7 @@ export function SuggestionsView() {
                     assigneeName={nameOf(s.personId)}
                     selected={live.has(s.id)}
                     busy={busy}
+                    readOnly={!canAct}
                     onToggle={() => toggle(s.id)}
                     onEdit={() => setEditing(s)}
                     onReject={() => reject.mutate(s.id, { onSuccess: () => { untick(s.id); toast('Rejected. You can restore it for 3 days.'); }, onError: fail })}

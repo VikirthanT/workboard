@@ -74,9 +74,20 @@ def can_act(actor: Person, team: Team) -> bool:
     return team.manager_id == actor.id
 
 
+def can_sync_standups(actor: Person, team: Team) -> bool:
+    """Read a team's standup channel and propose suggestions: the team's manager, or any admin (to check the connection or
+    to look before the manager does). It only stores suggestions for the manager to review; it never creates a task."""
+    return is_admin(actor) or team.manager_id == actor.id
+
+
 def require_view_team(actor: Person, team: Team) -> None:
     if not can_view_team(actor, team):
         raise AppError("forbidden", "You can only see your own team's board.", 403)
+
+
+def require_sync_standups(actor: Person, team: Team) -> None:
+    if not can_sync_standups(actor, team):
+        raise AppError("forbidden", "Only the team's manager or an admin can sync its standups.", 403)
 
 
 def require_act(actor: Person, team: Team) -> None:

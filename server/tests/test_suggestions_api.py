@@ -198,6 +198,17 @@ def test_bad_requests_are_422(world):
     assert call(world, world["asha"], "PATCH", f"/suggestions/{uuid.uuid4()}", json={}).status_code == 404
 
 
+def test_an_admin_sync_stores_suggestions_for_the_manager_but_creates_no_task(world, db):
+    team_id = world["team"]["id"]
+
+    res = call(world, world["admin"], "POST", f"/teams/{team_id}/suggestions/sync")
+
+    assert res.status_code == 200
+    assert ravi_entry(res.json())["suggestions"][0]["state"] == "pending"  # waiting for the manager
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
+    assert res.json()["last_synced_at"] is not None
+
+
 def test_who_may_call_what(world, directory):
     sid = ravi_entry(synced(world))["suggestions"][0]["id"]
     team_id = world["team"]["id"]
@@ -211,13 +222,14 @@ def test_who_may_call_what(world, directory):
         ("POST", f"/suggestions/{sid}/reject", None),
         ("POST", f"/suggestions/{sid}/restore", None),
     ]
-    reads_ok = {"admin": {"GET"}}  # an admin reads another team's page and changes nothing
+    reads_ok = {"admin": {"GET"}}  # an admin reads another team's page ...
 
     for method, path, body in calls:
         kw = {"json": body} if body is not None else {}
         assert call(world, None, method, path, **kw).status_code == 401, path
         for name, who in (("ravi", world["ravi"]), ("zoe", zoe), ("admin", world["admin"])):
-            expected = 200 if method in reads_ok.get(name, set()) else 403
+            admin_syncs = name == "admin" and path.endswith("/sync")  # ... and may sync it, but changes nothing else
+            expected = 200 if method in reads_ok.get(name, set()) or admin_syncs else 403
             assert call(world, who, method, path, **kw).status_code == expected, (name, path)
 
 

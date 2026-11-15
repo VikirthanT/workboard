@@ -18,7 +18,7 @@ from core.config import get_settings
 from core.exceptions import AppError
 from identity.services.lookup import get_team
 from models import Person, StandupRead, Task, TaskSuggestion, Team
-from security.authorization import require_act
+from security.authorization import require_sync_standups
 from standups.llm import extract, prompt
 from standups.services import suggestions as suggestions_service
 from standups.services.matching import person_matcher
@@ -32,7 +32,7 @@ def sync_team(db: Session, actor: Person, team_id: uuid.UUID, person_id: uuid.UU
     """Read the team's standup channel. With `person_id`, read only that person's posts, so a manager can go one person
     at a time (one model call at a time, and one failure or rate limit costs only that person)."""
     team = get_team(db, team_id)
-    require_act(actor, team)
+    require_sync_standups(actor, team)
     _sync(db, team, person_id)
 
 
@@ -88,6 +88,10 @@ def _sync(db: Session, team: Team, person_id: uuid.UUID | None) -> None:
             db.add(StandupRead(team_id=team.id, source_submission_id=sub.id, content_hash=digest))
         else:
             read.content_hash, read.read_at = digest, datetime.now(timezone.utc)
+        db.commit()
+
+    if person_id is None:  # a look at the whole team, found anything or not; one person's read says nothing about the rest
+        team.standup_synced_at = datetime.now(timezone.utc)
         db.commit()
 
 

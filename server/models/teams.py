@@ -17,6 +17,9 @@ class Team(Base):
     active: Mapped[bool] = mapped_column(default=True, server_default=true())
     # The team's standup channel: the standup app's channels.slack_channel_id. NULL = no suggestions for this team yet.
     standup_channel_id: Mapped[str | None] = mapped_column(String)
+    # When the whole team's standups were last read, whether or not anything was found (a manual or scheduled sync of
+    # everyone). NULL = never. The Suggestions page uses it to say "Standup not found" only after a real look.
+    standup_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

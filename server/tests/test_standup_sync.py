@@ -283,14 +283,15 @@ def test_a_failed_model_call_keeps_earlier_work_and_is_tried_again(db, world):
     assert len(world["prompts"]) == 3 and len(stored(db)) == 2  # only the failed submission was sent again
 
 
-def test_only_the_teams_own_manager_may_sync_and_the_team_needs_a_channel(db, world, directory):
+def test_only_the_teams_manager_or_an_admin_may_sync_and_the_team_needs_a_channel(db, world, directory):
     meena = directory.person("Meena")
     other = make_team(directory, world["admin"], "QA", directory.person("Zoe"))
 
-    for actor in (world["ravi"], world["admin"], meena):
+    for actor in (world["ravi"], meena):  # a plain member, and a person who runs no team
         with pytest.raises(AppError) as err:
             run(world, actor)
         assert err.value.status_code == 403
+    run(world, world["admin"])  # an admin may sync any team, to check the connection (it only stores suggestions)
 
     qa = db.get(Team, uuid.UUID(other["id"]))
     qa.standup_channel_id = None

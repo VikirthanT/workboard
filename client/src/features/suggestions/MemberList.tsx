@@ -1,5 +1,6 @@
 import type { PersonSuggestions } from '../../app/types/types';
 import { Badge } from '../../app/components/ui/badge';
+import { formatDateTime } from '../../app/lib/format';
 import { cn } from '../../app/lib/utils';
 import { hasBlocker, postedLabel } from './standupStatus';
 
@@ -8,6 +9,8 @@ interface Props {
   selectedPersonId: string | undefined;
   /** The signed-in manager, whose own row says "(you)". */
   meId?: string;
+  /** When the team's standups were last read (null: never). Someone with no standup is only called "not found" once a read has happened. */
+  lastSyncedAt?: string | null;
   /** Ids of the suggestions ticked to add, across everyone, so each row can say how many of theirs are ticked. */
   ticked: ReadonlySet<string>;
   onSelect: (personId: string) => void;
@@ -28,7 +31,7 @@ function Chip({ tone, children }: { tone: 'warning' | 'danger'; children: React.
 }
 
 /** The team's people, one row each: name, email, when they posted, chips, and how many suggestions wait. */
-export function MemberList({ people, selectedPersonId, meId, ticked, onSelect }: Props) {
+export function MemberList({ people, selectedPersonId, meId, lastSyncedAt, ticked, onSelect }: Props) {
   return (
     <nav aria-label="Team members" className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
       {people.map(({ person, standup, suggestions }) => {
@@ -53,7 +56,7 @@ export function MemberList({ people, selectedPersonId, meId, ticked, onSelect }:
               </span>
               <span className="truncate text-xs text-ink-subtle">{person.email}</span>
               <span className={cn('text-xs', standup ? 'text-ink-muted' : 'font-semibold text-warning-ink')}>
-                {standup ? postedLabel(standup) : 'No standup this week'}
+                {standup ? postedLabel(standup) : lastSyncedAt ? `Standup not found · checked ${formatDateTime(lastSyncedAt)}` : 'Not synced yet'}
               </span>
               {(standup?.lateReply || hasBlocker(standup)) && (
                 <span className="flex flex-wrap gap-1.5">

@@ -10,7 +10,7 @@ from core.config import settings
 from core.exceptions import AppError
 from models import Person, Task, TaskActivity, TaskSuggestion, Team
 from standups.llm import extract
-from standups.services import queries, suggestions as service
+from standups.services import queries, suggestions as service, sync
 from standups.standup_db import reader
 from tests.conftest import make_team
 
@@ -283,5 +283,12 @@ def test_who_may_read_the_list(db, world, directory):
         assert err.value.status_code == 403
 
 
-def test_last_synced_is_the_newest_read(db, world):
+def test_last_synced_is_none_until_the_whole_team_is_read_and_is_set_even_when_no_standup_is_found(db, world, monkeypatch):
+    monkeypatch.setattr(sync.reader, "list_submissions", lambda channel, since: [])  # nobody posted
     assert queries.last_synced(db, world["team_id"]) is None
+
+    sync.sync_team(db, world["asha"], world["team_id"], world["ravi"].id)  # one person only: says nothing about the team
+    assert queries.last_synced(db, world["team_id"]) is None
+
+    sync.sync_team_scheduled(db, world["team_id"])  # the whole team, and nothing was found
+    assert queries.last_synced(db, world["team_id"]) is not None

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from core.exceptions import AppError
 from identity.services.lookup import get_team
-from models import ROLE_MANAGER, Person, StandupRead, TaskSuggestion
+from models import ROLE_MANAGER, Person, Team, TaskSuggestion
 from security.authorization import require_view_team
 from standups.services.matching import person_matcher
 from standups.standup_db import reader
@@ -79,8 +79,8 @@ def get_suggestion(db: Session, actor: Person, suggestion_id: uuid.UUID) -> Task
 
 
 def last_synced(db: Session, team_id: uuid.UUID) -> datetime | None:
-    """When the team's standup was last read (the newest `standup_reads` row), or None if it never was."""
-    return db.scalar(select(StandupRead.read_at).where(StandupRead.team_id == team_id).order_by(StandupRead.read_at.desc()).limit(1))
+    """When the whole team's standups were last read, whether or not a post was found, or None if they never were."""
+    return db.scalar(select(Team.standup_synced_at).where(Team.id == team_id))
 
 
 def _recent_submissions(channel_id: str | None) -> tuple[list[reader.Submission], str | None]:

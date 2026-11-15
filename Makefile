@@ -20,7 +20,7 @@ PEOPLE_PATH = f="$${PEOPLE_FILE:-seed/people.json}"; [ ! -d "$$f" ] || f="$$f/pe
 NO_PEOPLE = echo "NOTE: $$f not found, so no people were loaded. Set PEOPLE_FILE in .env (see .env.example), or make the file with seed/csv_to_people.py."
 
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
-        server-install db-up db-down db-migrate db-seed db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev server-test server-cov e2e \
+        server-install db-up db-down db-migrate db-seed db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev scheduler-dev server-test server-cov e2e \
         prod-up prod-backup prod-load-people prod-down prod-logs
 
 help:
@@ -132,6 +132,10 @@ db-demo-remove:
 # without them it prints a note and exits, so `make dev` carries on without it. Restart it to pick up code changes.
 slack-dev:
 	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/python -m slack.listener
+
+# The standup scheduler: reads the standups at the times in STANDUP_SYNC_SCHEDULE (India time). Idles when it is empty.
+scheduler-dev:
+	@$(LOAD_ENV) cd server && TZ=Asia/Kolkata DEV_AUTH=true .venv/bin/python -m standups.scheduler
 
 # `make api-dev API_PORT=8001` runs a second API beside the one on :8000 (for example to try new .env settings without stopping it).
 API_PORT ?= 8000

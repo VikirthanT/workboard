@@ -91,7 +91,7 @@ export function AppShell() {
           {/* The logo is the way back to the board. Admin tools live in the user menu, beside the theme toggle. */}
           <div className="ml-auto flex items-center gap-3">
             <CountLink to="/?filter=needs_review" label="Needs review" count={me.counts.needsReview} />
-            {me.isManager && <CountLink to="/suggestions" label="Suggestions" count={suggestionCount.data ?? 0} always />}
+            {(me.isManager || me.isAdmin) && <CountLink to="/suggestions" label="Suggestions" count={suggestionCount.data ?? 0} always />}
             <ThemeToggle />
             {me && (
               <Menu

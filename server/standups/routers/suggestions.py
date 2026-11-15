@@ -41,7 +41,11 @@ def _standup(sub: Submission | None) -> schemas.StandupResponse | None:
     )
 
 
-def _page(db: Session, actor: Person, team_id: uuid.UUID) -> schemas.SuggestionsPageResponse:
+def _page(
+    db: Session,
+    actor: Person,
+    team_id: uuid.UUID,
+) -> schemas.SuggestionsPageResponse:
     team = get_team(db, team_id)
     page = queries.list_for_team(db, actor, team_id)
     return schemas.SuggestionsPageResponse(
@@ -60,7 +64,11 @@ def _page(db: Session, actor: Person, team_id: uuid.UUID) -> schemas.Suggestions
 
 
 @router.get("/teams/{team_id}/suggestions", response_model=schemas.SuggestionsPageResponse)
-def list_suggestions(team_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def list_suggestions(
+    team_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Each person on the team, the standup they last posted (three sections, or one message, or null when they posted
     nothing) and the suggestions from it. Suggestions show for 3 days after they last changed.
 
@@ -84,7 +92,8 @@ def sync_suggestions(
     shortcut: runs inside the request, and two syncs at once can race on the same post, when one fails on the unique
     rule and the other's work stands; move to a background job if syncs get slow or are triggered automatically.
 
-    Who: the team's own manager (403 `forbidden`). Errors: 404 `person_not_on_team`; 409 `standup_channel_not_set`;
+    Who: the team's own manager, or any admin (403 `forbidden`); an admin's sync only stores suggestions for the manager to
+    review, and everything after it (edit, reject, restore, add) stays with the manager. Errors: 404 `person_not_on_team`; 409 `standup_channel_not_set`;
     501 `standups_not_configured` or `llm_not_configured`; 502 `llm_failed` (nothing from the failed post is kept,
     earlier ones are).
     """
@@ -114,7 +123,10 @@ def add_suggestions(
 
 @router.patch("/suggestions/{suggestion_id}", response_model=schemas.SuggestionResponse)
 def edit_suggestion(
-    suggestion_id: uuid.UUID, body: schemas.SuggestionEdit, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)
+    suggestion_id: uuid.UUID,
+    body: schemas.SuggestionEdit,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
 ):
     """Change a pending suggestion: title, description, priority, person, start or due date. Sending a due date makes it
     the manager's own, no longer the default.
@@ -127,7 +139,11 @@ def edit_suggestion(
 
 
 @router.post("/suggestions/{suggestion_id}/reject", response_model=schemas.SuggestionResponse)
-def reject_suggestion(suggestion_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def reject_suggestion(
+    suggestion_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Reject a pending suggestion. It stays visible, and restorable, for 3 days.
 
     Who: the team's own manager. Errors: 403 `forbidden`; 404 `suggestion_not_found`; 409 `suggestion_not_pending`.
@@ -137,7 +153,11 @@ def reject_suggestion(suggestion_id: uuid.UUID, db: Session = Depends(get_db), a
 
 
 @router.post("/suggestions/{suggestion_id}/restore", response_model=schemas.SuggestionResponse)
-def restore_suggestion(suggestion_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def restore_suggestion(
+    suggestion_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Bring back a suggestion rejected in the last 3 days.
 
     Who: the team's own manager. Errors: 403 `forbidden`; 404 `suggestion_not_found`; 409 `not_restorable`.

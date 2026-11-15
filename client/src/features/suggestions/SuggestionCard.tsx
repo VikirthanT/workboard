@@ -13,6 +13,8 @@ interface Props {
   onEdit: () => void;
   onReject: () => void;
   onRestore: () => void;
+  /** An admin reading a team they do not run: the card shows the suggestion and offers no action. */
+  readOnly?: boolean;
 }
 
 /* Priority is the card's colour, as on the board: a coloured left edge plus a matching tag. (Copied from the board's
@@ -24,7 +26,7 @@ const PRIORITY_STYLE: Record<Suggestion['priority'], { edge: string; tag: string
 };
 
 /** One proposed task. A pending one can be selected, edited or rejected; a rejected one can be restored. */
-export function SuggestionCard({ suggestion: s, assigneeName, selected, busy, onToggle, onEdit, onReject, onRestore }: Props) {
+export function SuggestionCard({ suggestion: s, assigneeName, selected, busy, onToggle, onEdit, onReject, onRestore, readOnly = false }: Props) {
   const style = PRIORITY_STYLE[s.priority];
   return (
     <article className={cn('flex h-full flex-col gap-3 rounded-lg border border-l-4 border-line bg-surface p-3 shadow-raised', style.edge, s.state !== 'pending' && 'opacity-75')}>
@@ -58,7 +60,7 @@ export function SuggestionCard({ suggestion: s, assigneeName, selected, busy, on
         </span>
       </div>
 
-      {s.state === 'pending' && (
+      {!readOnly && s.state === 'pending' && (
         <div className="mt-auto flex gap-2">
           <Button size="sm" variant="success-outline" aria-pressed={selected} disabled={busy} onClick={onToggle} className={cn(selected && 'bg-success text-success-fg border-success')}>
             <Check size={14} aria-hidden />{selected ? 'Selected' : 'Select'}
@@ -67,7 +69,7 @@ export function SuggestionCard({ suggestion: s, assigneeName, selected, busy, on
           <Button size="sm" variant="ghost" disabled={busy} onClick={onReject}><X size={14} aria-hidden />Reject</Button>
         </div>
       )}
-      {s.state === 'rejected' && (
+      {!readOnly && s.state === 'rejected' && (
         <div className="mt-auto flex gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={onRestore}><ArrowCounterClockwise size={14} aria-hidden />Restore</Button>
         </div>
