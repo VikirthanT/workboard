@@ -98,10 +98,10 @@ export function SuggestionsView() {
         <EmptyState icon={ListChecks} title="No one on the team yet" description="Add people to the team first; suggestions come from their standup posts." />
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <MemberList people={people} selectedPersonId={current.person.id} ticked={live} onSelect={setPersonId} />
+          <MemberList people={people} selectedPersonId={current.person.id} meId={me.user.id} ticked={live} onSelect={setPersonId} />
           <div className="flex min-w-0 flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-md font-semibold text-ink">{current.person.displayName}</h2>
+              <h2 className="text-md font-semibold text-ink">{current.person.displayName}{current.person.id === me.user.id && <span className="font-normal text-ink-subtle"> (you)</span>}</h2>
               <Button
                 size="sm"
                 variant="outline"

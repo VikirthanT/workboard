@@ -6,6 +6,8 @@ import { hasBlocker, postedLabel } from './standupStatus';
 interface Props {
   people: PersonSuggestions[];
   selectedPersonId: string | undefined;
+  /** The signed-in manager, whose own row says "(you)". */
+  meId?: string;
   /** Ids of the suggestions ticked to add, across everyone, so each row can say how many of theirs are ticked. */
   ticked: ReadonlySet<string>;
   onSelect: (personId: string) => void;
@@ -26,7 +28,7 @@ function Chip({ tone, children }: { tone: 'warning' | 'danger'; children: React.
 }
 
 /** The team's people, one row each: name, email, when they posted, chips, and how many suggestions wait. */
-export function MemberList({ people, selectedPersonId, ticked, onSelect }: Props) {
+export function MemberList({ people, selectedPersonId, meId, ticked, onSelect }: Props) {
   return (
     <nav aria-label="Team members" className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
       {people.map(({ person, standup, suggestions }) => {
@@ -45,7 +47,10 @@ export function MemberList({ people, selectedPersonId, ticked, onSelect }: Props
             )}
           >
             <span className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-md font-semibold text-ink">{person.displayName}</span>
+              <span className="text-md font-semibold text-ink">
+                {person.displayName}
+                {person.id === meId && <span className="font-normal text-ink-subtle"> (you)</span>}
+              </span>
               <span className="truncate text-xs text-ink-subtle">{person.email}</span>
               <span className={cn('text-xs', standup ? 'text-ink-muted' : 'font-semibold text-warning-ink')}>
                 {standup ? postedLabel(standup) : 'No standup this week'}
