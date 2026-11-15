@@ -51,9 +51,13 @@ export function useChangeManager() {
   return useMutation({ mutationFn: changeManager, onSuccess: useRefreshTeams() });
 }
 
-/** The standup app's channels for the picker. Loaded only while a dialog that needs them is open; no retry, since a 501 means "not set up". */
+/**
+ * The standup app's channels for the picker. Read once and kept for the whole session (until sign-out or a reload); a
+ * suggestions Sync marks it stale, so a channel added to the standup app shows after the next Sync. No retry, since a 501
+ * means "not set up".
+ */
 export function useStandupChannels(enabled: boolean) {
-  return useQuery({ queryKey: STANDUP_CHANNELS_KEY, queryFn: getStandupChannels, enabled, retry: false });
+  return useQuery({ queryKey: STANDUP_CHANNELS_KEY, queryFn: getStandupChannels, enabled, retry: false, staleTime: Infinity, gcTime: Infinity });
 }
 
 /** The name of one channel id, for the team header and the typed-id hint: the server answers from the standup app's list, then Slack. */
@@ -64,7 +68,8 @@ export function useChannelName(channelId: string | null | undefined, enabled = t
     queryFn: () => getChannelName(id),
     enabled: enabled && id.length >= 3,
     retry: false,
-    staleTime: 10 * 60 * 1000, // a channel's name rarely changes
+    staleTime: Infinity, // a channel's name rarely changes: kept for the session, refreshed by a Sync like the channel list
+    gcTime: Infinity,
   });
 }
 

@@ -4,13 +4,18 @@ import type { SuggestionPatch, SuggestionsPage } from '../../../app/types/types'
 import { addSuggestions, editSuggestion, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from '../../../services/api';
 import { pendingCount } from '../pendingCount';
 
-/** The page for a team: each person with their latest standup and suggestions. Reads the standup database on the server, so it is not refetched on every focus. */
+/**
+ * The page for a team: each person with their latest standup and suggestions. It reads the standup database on the server,
+ * so it is read once and kept for the whole session (until sign-out or a reload); only a Sync, or a change the manager makes
+ * to a suggestion, replaces it. A scheduled sync on the server therefore shows after a reload or the next Sync.
+ */
 export function useSuggestions(teamId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: getSuggestionsKey(teamId ?? ''),
     queryFn: () => getSuggestions(teamId!),
     enabled: enabled && !!teamId,
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: Infinity, // kept even while the page is closed
     refetchOnWindowFocus: false,
   });
 }
@@ -21,7 +26,8 @@ export function usePendingSuggestionCount(teamId: string | undefined, enabled = 
     queryKey: getSuggestionsKey(teamId ?? ''),
     queryFn: () => getSuggestions(teamId!),
     enabled: enabled && !!teamId,
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: Infinity,
     refetchOnWindowFocus: false,
     select: pendingCount,
   });
