@@ -14,7 +14,7 @@ router = APIRouter(prefix="/standups", tags=["standups"])
 def list_channels(actor: Person = Depends(get_current_person)):
     """Every channel in the standup app's database, by name, for the "standup channel" picker.
 
-    Who: admins only (403 `forbidden`).
+    Who: admins and managers (403 `forbidden`).
     Errors: 501 `standups_not_configured` when `STANDUP_DB_URL` is not set on this server.
     """
     return channels.list_channels(actor)

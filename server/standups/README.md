@@ -10,7 +10,7 @@ All under `/api`. Every endpoint needs a signed-in person (401 otherwise).
 
 | Method and path | Who | File | What it does |
 | --- | --- | --- | --- |
-| `GET /api/standups/channels` | admin | `routers/channels.py` | Every channel in the standup database, by name (`slack_channel_id`, `name`), for the admin's channel picker. |
+| `GET /api/standups/channels` | admin, manager | `routers/channels.py` | Every channel in the standup database, by name (`slack_channel_id`, `name`), for the channel picker (an admin's, or a manager's for their own team). |
 | `GET /api/teams/{id}/suggestions` | the team's manager; an admin (read only) | `routers/suggestions.py` | Each person on the team, manager first, with the standup they last posted (three sections, or one `message`, or `null`) and their suggestions. Suggestions show for 3 days after they last changed. `last_synced_at` and `standup_channel_id` ride along. |
 | `POST /api/teams/{id}/suggestions/sync?person_id=` | the team's manager | `routers/suggestions.py` | Read the channel (last 14 days), propose tasks, return the same page. With `person_id`, only that person's posts, so a manager can go one person at a time (404 `person_not_on_team` for anyone else). Runs the language model, inside the request. |
 | `POST /api/teams/{id}/suggestions/add` | the team's manager | `routers/suggestions.py` | Body `{suggestion_ids}`. Create a task from each chosen pending suggestion, assigned to the person it is for; all or nothing. Returns the page. |

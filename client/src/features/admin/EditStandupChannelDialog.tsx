@@ -6,8 +6,8 @@ import { ReasonFormDialog } from '../team';
 import { StandupChannelField } from './StandupChannelField';
 import { useSetStandupChannel } from './hooks';
 
-/** Change which standup channel a team's suggestions are read from. Audited, so it asks for a reason. */
-export function EditStandupChannelDialog({ team, onClose }: { team: TeamRecord | null; onClose: () => void }) {
+/** Change which standup channel a team's suggestions are read from. Audited: an admin must give a reason, the team's own manager need not. */
+export function EditStandupChannelDialog({ team, reasonOptional = false, onClose }: { team: TeamRecord | null; reasonOptional?: boolean; onClose: () => void }) {
   const save = useSetStandupChannel();
   const { toast } = useToast();
   const [channel, setChannel] = useState('');
@@ -20,6 +20,7 @@ export function EditStandupChannelDialog({ team, onClose }: { team: TeamRecord |
       description="Suggestions for this team are read from this channel from now on. Existing suggestions are kept."
       placeholder="Why is the channel changing?"
       submitLabel="Save channel"
+      reasonOptional={reasonOptional}
       busy={save.isPending}
       autoFocusReason={false}
       onClose={onClose}

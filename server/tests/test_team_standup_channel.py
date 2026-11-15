@@ -52,14 +52,17 @@ def test_an_admin_sets_changes_and_clears_the_channel_and_each_change_is_audited
     ]
 
 
-def test_a_manager_cannot_set_even_their_own_teams_channel(directory, admin):
-    asha = directory.person("Asha")
+def test_a_manager_sets_their_own_teams_channel_without_a_reason_but_not_another_teams(directory, admin):
+    asha, ravi = directory.person("Asha"), directory.person("Ravi")
     team = make_team(directory, admin, "NPI", asha)
+    other = make_team(directory, admin, "Validation", ravi)
 
-    res = set_channel(directory, asha, team, "C0NPI")
+    refused = set_channel(directory, asha, other, "C0NPI")
+    res = set_channel(directory, asha, team, "C0NPI", reason=None)
 
-    assert res.status_code == 403
-    assert directory.call(admin, "GET", "/teams").json()[0]["standup_channel_id"] == "C0TEST"  # unchanged
+    assert refused.status_code == 403
+    assert res.status_code == 200
+    assert res.json()["standup_channel_id"] == "C0NPI"
 
 
 def test_the_rules_around_a_change(directory, admin):

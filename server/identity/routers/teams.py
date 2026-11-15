@@ -72,8 +72,8 @@ def change_standup_channel(
 ):
     """Set, change or clear the standup channel the team's suggestions are read from.
 
-    Who: admins only (403 `forbidden`).
-    Body: {standup_channel_id (null or blank clears it), reason}. The reason is required and goes to the audit log.
+    Who: an admin, or the manager of this team (403 `forbidden`).
+    Body: {standup_channel_id (null or blank clears it), reason}. The reason goes to the audit log; an admin must give one.
     Errors: 409 `same_channel` (no change); 422 `invalid_channel`; 404 `team_not_found`.
     """
     teams.set_standup_channel(db, actor, team_id, body.standup_channel_id, body.reason)

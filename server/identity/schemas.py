@@ -61,7 +61,7 @@ class TeamCreate(BaseModel):
 class StandupChannelChange(BaseModel):
     """null (or blank) clears the channel: the team then gets no suggestions."""
     standup_channel_id: str | None = Field(max_length=MAX_CHANNEL_ID_LENGTH)
-    reason: str = Field(max_length=MAX_REASON_LENGTH)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)  # an admin must give one; the service checks
 
 
 class TeamDelete(BaseModel):

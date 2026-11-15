@@ -24,7 +24,7 @@ interface Props extends MemberActions {
   onAdd: () => void;
   /** Admin only: delete the team. Left out for a manager. */
   onDeleteTeam?: () => void;
-  /** Admin only: change the team's standup channel. Left out for a manager, who neither sees nor sets it. */
+  /** Change the team's standup channel: an admin on any team, a manager on their own. */
   onEditChannel?: () => void;
   /** The channel's name, when the caller has the channel list; otherwise the header falls back to the id. */
   channelName?: string;

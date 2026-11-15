@@ -41,7 +41,7 @@ CASES = [
     ("change manager", "PATCH", "/teams/$npi/manager", '{"person_id": "$meena", "reason": "r"}',
      dict(anon=401, member=403, other_manager=403, own_manager=403, admin=200)),
     ("set standup channel", "PATCH", "/teams/$npi/standup-channel", '{"standup_channel_id": "C0NPI", "reason": "r"}',
-     dict(anon=401, member=403, other_manager=403, own_manager=403, admin=200)),
+     dict(anon=401, member=403, other_manager=403, own_manager=200, admin=200)),
     ("list members", "GET", "/teams/$npi/members", None,
      dict(anon=401, member=403, other_manager=403, own_manager=200, admin=200)),
     ("add member", "POST", "/teams/$npi/members", '{"person_id": "$loner", "reason": "r"}',

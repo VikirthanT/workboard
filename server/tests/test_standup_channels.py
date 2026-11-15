@@ -22,12 +22,12 @@ def test_an_admin_gets_the_channels(directory, admin, two_channels):
     ]
 
 
-def test_nobody_else_gets_them(directory, admin, two_channels):
+def test_a_manager_gets_them_but_a_plain_member_does_not(directory, admin, two_channels):
     asha, meena = directory.person("Asha"), directory.person("Meena")
     make_team(directory, admin, "NPI", asha)
 
     assert directory.call(None, "GET", "/standups/channels").status_code == 401
-    assert directory.call(asha, "GET", "/standups/channels").status_code == 403  # a manager, not an admin
+    assert directory.call(asha, "GET", "/standups/channels").status_code == 200  # a manager picks their own team's channel
     assert directory.call(meena, "GET", "/standups/channels").status_code == 403  # a plain member
 
 

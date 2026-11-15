@@ -14,7 +14,7 @@ from identity import states
 from identity.services import audit
 from identity.services.lookup import get_person, get_team
 from models import ROLE_MANAGER, ROLE_MEMBER, Person, Task, Team
-from security.authorization import is_admin, require_admin
+from security.authorization import is_admin, require_admin, require_team_access
 from tasks.services.deletion_audit import record_task_deleted
 
 
@@ -81,13 +81,14 @@ def create_team(
 
 
 def set_standup_channel(
-    db: Session, actor: Person, team_id: uuid.UUID, standup_channel_id: str | None, reason: str
+    db: Session, actor: Person, team_id: uuid.UUID, standup_channel_id: str | None, reason: str | None
 ) -> None:
-    """Set, change or clear the standup channel a team's suggestions are read from. Admins only, audited."""
-    require_admin(actor)
-    reason_text = audit.clean_reason(reason, required=True)
-    channel = _clean_channel(standup_channel_id)
+    """Set, change or clear the standup channel a team's suggestions are read from. An admin or the team's own manager, audited;
+    the reason is required from an admin only, like the other membership changes."""
     team = get_team(db, team_id, lock=True)
+    require_team_access(actor, team)
+    reason_text = audit.clean_reason(reason, required=is_admin(actor))
+    channel = _clean_channel(standup_channel_id)
     if channel == team.standup_channel_id:
         raise AppError("same_channel", "The team already uses that standup channel.", 409)
 
