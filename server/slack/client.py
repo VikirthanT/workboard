@@ -3,6 +3,9 @@
 Plain HTTPS through httpx, no SDK. The one place that touches the network (`_post`), so tests replace it. A Slack error
 carries only Slack's own error code (`channel_not_found`, `not_in_channel`, ...); the token is never put in a message.
 """
+import http.cookiejar
+import threading
+
 import httpx
 
 API = "https://slack.com/api"
@@ -13,9 +16,30 @@ class SlackError(Exception):
     """Slack refused or could not be reached. The text is safe to store and show: it holds no token."""
 
 
+def _new_client(**kwargs) -> httpx.Client:
+    """The one HTTP client for every Slack call, so the secure connection is kept open between calls instead of being set up
+    again each time. It holds nothing that could leak: no default headers (the token goes on each API call only, so it never
+    reaches the file-upload address Slack hands back), no cookies (all refused), no redirects followed, certificates checked."""
+    client = httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False, **kwargs)
+    client.cookies.jar.set_policy(http.cookiejar.DefaultCookiePolicy(allowed_domains=[]))  # accept cookies from no domain
+    return client
+
+
+_shared: httpx.Client | None = None
+_shared_lock = threading.Lock()
+
+
+def _http() -> httpx.Client:
+    global _shared
+    with _shared_lock:  # the listener runs its handlers in threads
+        if _shared is None:
+            _shared = _new_client()
+        return _shared
+
+
 def _post(url: str, **kwargs) -> httpx.Response:
     try:
-        return httpx.post(url, timeout=TIMEOUT_SECONDS, **kwargs)
+        return _http().post(url, **kwargs)
     except httpx.HTTPError as err:
         raise SlackError("Slack could not be reached.") from err
 
@@ -61,6 +85,11 @@ def post_message(
 
 def update_message(token: str, channel: str, ts: str, text: str, blocks: list[dict], color: str | None = None) -> None:
     _call(token, "chat.update", json={"channel": channel, "ts": ts, **_content(text, blocks, color)})
+
+
+def publish_home(token: str, slack_user_id: str, view: dict) -> None:
+    """Replace what this person sees on the bot's Home tab."""
+    _call(token, "views.publish", json={"user_id": slack_user_id, "view": view})
 
 
 def post_with_pdf(token: str, channel: str, text: str, filename: str, pdf: bytes) -> None:

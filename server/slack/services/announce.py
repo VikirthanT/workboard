@@ -52,6 +52,13 @@ def _send_pending(db: Session, team_id: uuid.UUID, token: str, heading: str) -> 
         return
 
     tasks = list(db.scalars(select(Task).where(Task.id.in_([r.task_id for r in rows])).order_by(Task.created_at, Task.title)))
+    tasks = [t for t in tasks if t.assignee_id != team.manager_id]  # the manager's own tasks are not announced to the team
+    if not tasks:  # nothing for the channel (the manager's DM card is sent separately)
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            row.status, row.sent_at, row.last_error = "sent", now, None
+        db.commit()
+        return
     person_ids = {t.assignee_id for t in tasks} | {t.creator_id for t in tasks}
     people = {p.id: p for p in db.scalars(select(Person).where(Person.id.in_(person_ids)))}
     # A task made from a standup suggestion carries the standup line it came from; the PDF shows it under the description.
@@ -64,7 +71,7 @@ def _send_pending(db: Session, team_id: uuid.UUID, token: str, heading: str) -> 
             assignee_name=people[t.assignee_id].name if t.assignee_id in people else "Unassigned",
             assignee_slack_id=people[t.assignee_id].slack_user_id if t.assignee_id in people else None,
             assignee_email=people[t.assignee_id].email if t.assignee_id in people else None,
-            quote=quotes.get(t.id),
+            quote=quotes.get(t.id), project=t.project, stage=t.stage,
         )
         for t in tasks
     ]

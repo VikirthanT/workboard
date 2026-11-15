@@ -73,6 +73,21 @@ def _clean_rate_limits():
 
 
 @pytest.fixture(autouse=True)
+def _no_real_slack(monkeypatch):
+    """No test may reach Slack, whatever token it sets: the one function that touches the network refuses. A test that
+    wants Slack's behaviour fakes the client function it uses, or replaces `_post` itself. Also forgets each person's Home
+    tab filters, which the listener keeps in memory."""
+    from slack import client as slack_client
+    from slack.services import home
+
+    def refuse(*args, **kwargs):
+        raise slack_client.SlackError("Slack is not reachable from the tests.")
+
+    monkeypatch.setattr(slack_client, "_post", refuse)
+    home._filters.clear()
+
+
+@pytest.fixture(autouse=True)
 def _clean_tables():
     yield
     with SessionLocal() as db:

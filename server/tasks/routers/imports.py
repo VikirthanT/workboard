@@ -88,5 +88,5 @@ async def upload_tasks(
         )
     if preview:
         return JSONResponse(status_code=200, content={"tasks": import_parse.preview(db, rows)})
-    background.add_task(announce.flush_team, team.id)  # the assignees' DM cards; imports are not announced in the channel
+    background.add_task(announce.flush_team, team.id)  # the "Added tasks" channel post (queued with the tasks) and the assignees' DM cards
     return {"created": len(rows)}

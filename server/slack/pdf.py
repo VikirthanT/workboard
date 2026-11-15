@@ -33,6 +33,8 @@ class AnnouncedTask:
     assignee_slack_id: str | None
     assignee_email: str | None = None
     quote: str | None = None  # the standup line a suggestion came from, when the task came from one
+    project: str | None = None
+    stage: str | None = None
 
 
 _PLAIN = str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'", "–": "-", "—": "-", "…": "...", "•": "-", "₹": "Rs "})
@@ -128,7 +130,12 @@ def _card(pdf: Sheet, x: float, y: float, width: float, number: int, task: Annou
     if task.start_at:
         pdf.set_text_color(*SUBTLE)
         pdf.set_font("Helvetica", "", 9.5)
-        pdf.cell(0, 5, f"  ·  Start {day(task.start_at)}")
+        pdf.cell(pdf.get_string_width(f"  ·  Start {day(task.start_at)}") + 1, 5, f"  ·  Start {day(task.start_at)}")
+    labels = [f"{name} {value}" for name, value in (("Project", task.project), ("Stage", task.stage)) if value]
+    if labels:
+        pdf.set_text_color(*SUBTLE)
+        pdf.set_font("Helvetica", "", 9.5)
+        pdf.cell(0, 5, latin1("  ·  " + "  ·  ".join(labels)))
     return height
 
 

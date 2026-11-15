@@ -15,7 +15,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from core.config import get_settings
 from slack import blocks
-from slack.services import interactions
+from slack.services import home, interactions
 
 
 def build_app(bot_token: str, verify: bool = True) -> App:
@@ -38,11 +38,38 @@ def build_app(bot_token: str, verify: bool = True) -> App:
         if blocks.needs_reason(to):  # Blocked, or back to To Do: ask for the reason first
             view, problem = interactions.reason_view(user, task_id, to)
             if problem:
-                interactions.reset_card(task_id)
+                interactions.reset_card(task_id, user)
                 return tell(client, user, channel, problem)
             return client.views_open(trigger_id=body["trigger_id"], view=view)
         if problem := interactions.move(user, task_id, to, None):
             tell(client, user, channel, problem)
+
+    @app.event("app_home_opened")
+    def on_home_opened(event):
+        """Someone opened the bot's Home tab (not its Messages tab): draw their tasks."""
+        if event.get("tab") == "home":
+            home.publish(event["user"])
+
+    @app.action(blocks.HOME_STAGE_ACTION)
+    def on_home_stage(ack, body):
+        ack()
+        chosen = body["actions"][0]["selected_option"]["value"]
+        home.publish(body["user"]["id"], stage=None if chosen == blocks.HOME_ALL else chosen)
+
+    @app.action(blocks.HOME_STATUS_FILTER_ACTION)
+    def on_home_show(ack, body):
+        ack()
+        chosen = body["actions"][0]["selected_option"]["value"]
+        home.publish(body["user"]["id"], status=None if chosen == blocks.HOME_ALL else chosen)
+
+    @app.action(blocks.HOME_DETAILS_ACTION)
+    def on_home_details(ack, body, client):
+        """The Details button on a Home tab row: a read-only popup with the task and its thread."""
+        ack()
+        view, problem = interactions.details_view(body["user"]["id"], body["actions"][0]["value"])
+        if problem:
+            return tell(client, body["user"]["id"], None, problem)
+        client.views_open(trigger_id=body["trigger_id"], view=view)
 
     @app.action(blocks.COMMENT_ACTION)
     def on_comment(ack, body, client):
@@ -63,10 +90,10 @@ def build_app(bot_token: str, verify: bool = True) -> App:
             tell(client, body["user"]["id"], None, problem)
 
     @app.view_closed("wb_reason")
-    def on_reason_closed(ack, view):
+    def on_reason_closed(ack, body, view):
         """The reason form was cancelled: the dropdown still shows the choice that was never made, so redraw the card."""
         ack()
-        interactions.reset_card(view["private_metadata"].split("|")[0])
+        interactions.reset_card(view["private_metadata"].split("|")[0], body["user"]["id"])
 
     @app.view("wb_reason")
     def on_reason(ack, body, client, view):

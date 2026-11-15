@@ -415,6 +415,7 @@ def test_a_reason_form_opens_for_blocked_and_back_to_todo_and_asks_to_be_told_wh
         assert problem is None and view["callback_id"] == "wb_reason" and view["private_metadata"] == f"{task.id}|{to}"
         assert view["title"]["text"] == title and view["notify_on_close"] is True  # so a cancel can reset the dropdown
         assert len(view["title"]["text"]) <= 24 and len(view["submit"]["text"]) <= 24  # Slack's limits on a modal's buttons and title
+        assert view["blocks"][0]["label"]["text"] == "Reason"  # not the task's title, which only repeated the card
 
     assert interactions.reason_view("U0RAVI1234", str(task.id), "done")[0] is None
     assert interactions.reason_view("UNOBODY999", str(task.id), "blocked")[0] is None
