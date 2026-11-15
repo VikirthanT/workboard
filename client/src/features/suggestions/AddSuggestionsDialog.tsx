@@ -16,6 +16,9 @@ interface Props {
   teamId: string;
   /** The ticked suggestions, grouped by the person each is for. */
   groups: { person: PersonSuggestions['person']; suggestions: Suggestion[] }[];
+  /** The due dates the manager has typed here, by suggestion id. The page keeps them, so closing and reopening the dialog (or a failed Create) does not lose them. */
+  dues: Record<string, string>;
+  onDueChange: (id: string, due: string) => void;
   onClose: () => void;
   onAdded: (count: number) => void;
 }
@@ -30,11 +33,11 @@ const TAG: Record<Suggestion['priority'], string> = {
  * The last look before the tasks are created: each ticked suggestion with its details, and a tick to drop any of them.
  * The page mounts it only while it is open, so everything starts ticked and a re-render of the page cannot reset it.
  */
-export function AddSuggestionsDialog({ teamId, groups, onClose, onAdded }: Props) {
+export function AddSuggestionsDialog({ teamId, groups, dues: typed, onDueChange, onClose, onAdded }: Props) {
   const add = useAddSuggestions(teamId);
   const [keep, setKeep] = useState<Set<string>>(() => new Set(groups.flatMap((g) => g.suggestions.map((s) => s.id))));
-  // A task needs a due date: the one the suggestion has, or the one the manager types here. Starts from the suggestion's own.
-  const [dues, setDues] = useState<Record<string, string>>(() => Object.fromEntries(groups.flatMap((g) => g.suggestions.map((s) => [s.id, s.dueAt ?? '']))));
+  // A task needs a due date: the one the manager typed (kept by the page), else the one the suggestion has.
+  const dues: Record<string, string> = Object.fromEntries(groups.flatMap((g) => g.suggestions.map((s) => [s.id, typed[s.id] ?? s.dueAt ?? ''])));
   const [error, setError] = useState('');
   const today = todayISO();
 
@@ -89,7 +92,7 @@ export function AddSuggestionsDialog({ teamId, groups, onClose, onAdded }: Props
                         <Label htmlFor={`due-${s.id}`} className="text-xs">
                           Due date<span aria-hidden className="text-danger"> *</span><span className="sr-only"> (required)</span>
                         </Label>
-                        <DatePicker id={`due-${s.id}`} className="mt-1 h-9" value={dues[s.id]} minDate={today} onChange={(v) => setDues((d) => ({ ...d, [s.id]: v }))} />
+                        <DatePicker id={`due-${s.id}`} className="mt-1 h-9" value={dues[s.id]} minDate={today} onChange={(v) => onDueChange(s.id, v)} />
                         {needsDate(s.id) && (
                           <p className="mt-1 text-xs text-danger-ink">{dues[s.id] ? 'That date has passed. Choose a new one.' : 'Choose a due date.'}</p>
                         )}

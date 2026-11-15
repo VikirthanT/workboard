@@ -70,6 +70,8 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [editing, setEditing] = useState<Suggestion | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  // Due dates typed in the review dialog, kept here so they survive closing it (and a failed Create).
+  const [dues, setDues] = useState<Record<string, string>>({});
   const teamName = teams?.find((t) => t.id === teamId)?.name;
 
   if (page.isError) return <div className="mx-auto max-w-[720px] p-8"><Alert variant="danger" title="Could not load suggestions">{errorMessage(page.error)}</Alert></div>;
@@ -196,8 +198,10 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
         <AddSuggestionsDialog
           teamId={teamId}
           groups={groups}
+          dues={dues}
+          onDueChange={(id, due) => setDues((d) => ({ ...d, [id]: due }))}
           onClose={() => setReviewing(false)}
-          onAdded={(n) => { setTicked(new Set()); toast(`${n} ${n === 1 ? 'task' : 'tasks'} added to the board.`, 'success'); }}
+          onAdded={(n) => { setTicked(new Set()); setDues({}); toast(`${n} ${n === 1 ? 'task' : 'tasks'} added to the board.`, 'success'); }}
         />
       )}
     </div>

@@ -46,5 +46,9 @@ export function errorMessage(err: unknown, fallback = 'Something went wrong.'): 
   const d = detailOf(err);
   if (typeof d === 'string') return d;
   if (Array.isArray(d)) return d[0]?.msg ?? fallback;
-  return d?.message ?? (err as { message?: string })?.message ?? fallback;
+  if (d?.message) return d.message;
+  // A server crash carries no readable detail; axios's own text ("Request failed with status code 500") tells a person nothing.
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (status && status >= 500) return `The server hit a problem (error ${status}) and did not finish. Nothing was saved. Try again, and if it keeps happening tell an admin.`;
+  return (err as { message?: string })?.message ?? fallback;
 }

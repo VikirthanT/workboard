@@ -11,6 +11,12 @@ describe('errorMessage', () => {
     expect(errorMessage(failed([{ msg: 'String should have at most 140 characters' }]))).toBe('String should have at most 140 characters');
   });
 
+  it('explains a server crash instead of showing axios\'s raw "status code 500"', () => {
+    const crashed = { response: { status: 500, data: 'Internal Server Error' }, message: 'Request failed with status code 500' };
+    expect(errorMessage(crashed)).toMatch(/The server hit a problem \(error 500\)/);
+    expect(errorMessage(crashed)).not.toMatch(/status code/);
+  });
+
   it('falls back to the network error, then to the given text', () => {
     expect(errorMessage({ message: 'Network Error' })).toBe('Network Error');
     expect(errorMessage({}, 'Sign in failed.')).toBe('Sign in failed.');

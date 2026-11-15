@@ -4,11 +4,11 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 
 from core.config import settings
-from models import Task, TaskSuggestion
+from models import Person, Task, TaskSuggestion
 from standups.llm import extract
 from standups.services import queries, sync
 from standups.standup_db import reader
@@ -174,6 +174,21 @@ def test_adding_a_suggestion_with_no_due_date_is_refused_by_the_server_until_a_d
     ok = add({"suggestion_ids": [sid], "due_dates": {sid: due}})
     assert ok.status_code == 200
     assert db.scalar(select(Task)).due_at.isoformat() == due
+
+
+def test_adding_a_suggestion_for_someone_who_left_the_team_is_a_named_422_not_a_500(world, db):
+    sid = ravi_entry(synced(world))["suggestions"][0]["id"]
+    db.execute(update(Person).where(Person.id == world["ravi"].id).values(team_id=None))  # removed from the team after the sync
+    db.commit()
+    db.expire_all()
+    due = (TODAY + timedelta(days=5)).isoformat()
+
+    res = call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/add", json={"suggestion_ids": [sid], "due_dates": {sid: due}})
+
+    assert res.status_code == 422, (res.status_code, res.text)
+    assert res.json()["detail"]["code"] == "invalid_assignee"
+    assert "Design weld jig for rear axle" in res.json()["detail"]["message"] and "Ravi" in res.json()["detail"]["message"]
+    assert db.scalar(select(func.count()).select_from(Task)) == 0
 
 
 def test_a_due_date_cannot_be_chosen_in_the_past_but_today_and_clearing_are_fine(world):

@@ -108,6 +108,9 @@ def add_to_board(
             add_task_uncommitted(db, actor, team, task_id, s.title, description, s.priority, s.due_at, s.person_id, start)
         except AppError as err:
             db.rollback()
+            who = db.get(Person, s.person_id)
+            if err.code == "invalid_assignee" and who is not None:  # say who, not just "your team"
+                raise AppError(err.code, f"“{s.title}”: {who.name} is no longer an active member of this team. Reassign or reject this suggestion.", err.status_code) from err
             raise AppError(err.code, f"“{s.title}”: {err.message}", err.status_code) from err
         s.state, s.state_at, s.task_id = "approved", _now(), task_id
     db.commit()

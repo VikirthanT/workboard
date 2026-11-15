@@ -1,3 +1,4 @@
+import { useState, type ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -27,6 +28,12 @@ const suggestion = (over: Partial<Suggestion>): Suggestion => ({
 const ravi = { id: 'p-ravi', displayName: 'Ravi', email: 'ravi@example.test', role: 'member' as const };
 const asha = { id: 'p-asha', displayName: 'Asha', email: 'asha@example.test', role: 'manager' as const };
 
+/** Holds the typed due dates the way the Suggestions page does, which keeps them when the dialog is closed. */
+function AddHost({ typed = {}, ...props }: Omit<ComponentProps<typeof AddSuggestionsDialog>, 'dues' | 'onDueChange'> & { typed?: Record<string, string> }) {
+  const [dues, setDues] = useState(typed);
+  return <AddSuggestionsDialog {...props} dues={dues} onDueChange={(id, due) => setDues((d) => ({ ...d, [id]: due }))} />;
+}
+
 beforeEach(() => { h.mutate.mockReset(); }); // braces: a returned function would be run as a cleanup, with no arguments
 
 describe('AddSuggestionsDialog', () => {
@@ -34,7 +41,7 @@ describe('AddSuggestionsDialog', () => {
     { person: ravi, suggestions: [suggestion({ id: 's1' }), suggestion({ id: 's2', title: 'Order bracket samples', description: 'Samples are ordered.', priority: 'high' })] },
     { person: asha, suggestions: [suggestion({ id: 's3', title: 'Review test plan', description: 'The plan is reviewed.', personId: 'p-asha' })] },
   ];
-  const open = (onClose = vi.fn(), onAdded = vi.fn()) => render(<AddSuggestionsDialog teamId="t1" groups={groups} onClose={onClose} onAdded={onAdded} />);
+  const open = (onClose = vi.fn(), onAdded = vi.fn()) => render(<AddHost teamId="t1" groups={groups} onClose={onClose} onAdded={onAdded} />);
 
   it('starts with everything ticked and says what Create will do', () => {
     open();
@@ -61,7 +68,14 @@ describe('AddSuggestionsDialog', () => {
 
   describe('the due date is compulsory', () => {
     const undated = [{ person: ravi, suggestions: [suggestion({ id: 's1', dueAt: null }), suggestion({ id: 's2', title: 'Order bracket samples' })] }];
-    const openUndated = (onAdded = vi.fn()) => render(<AddSuggestionsDialog teamId="t1" groups={undated} onClose={vi.fn()} onAdded={onAdded} />);
+    const openUndated = (onAdded = vi.fn(), typed?: Record<string, string>) => render(<AddHost teamId="t1" groups={undated} typed={typed} onClose={vi.fn()} onAdded={onAdded} />);
+
+    it('shows a date the manager already chose when the dialog is opened again', () => {
+      openUndated(vi.fn(), { s1: addDays(TODAY, 6) }); // what the page kept after the manager closed the dialog
+
+      expect(screen.getByLabelText('date due-s1')).toHaveValue(addDays(TODAY, 6));
+      expect(screen.getByRole('button', { name: 'Create (2)' })).toBeEnabled();
+    });
 
     it('cannot create while a task has no due date, and says which still need one', () => {
       openUndated();
@@ -97,7 +111,7 @@ describe('AddSuggestionsDialog', () => {
 
     it('asks for a new date when the suggestion\'s own has already passed', () => {
       const stale = [{ person: ravi, suggestions: [suggestion({ id: 's1', dueAt: addDays(TODAY, -2) })] }];
-      render(<AddSuggestionsDialog teamId="t1" groups={stale} onClose={vi.fn()} onAdded={vi.fn()} />);
+      render(<AddHost teamId="t1" groups={stale} onClose={vi.fn()} onAdded={vi.fn()} />);
 
       expect(screen.getByText('That date has passed. Choose a new one.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Create (1)' })).toBeDisabled();
