@@ -33,7 +33,10 @@ THREAD_MAX_ENTRIES = 15  # the newest timeline entries the Details popup shows
 # Slack cannot colour text on a Home tab, so colour is carried by emoji: a dot for the task's priority (the board's red,
 # amber and green) and a square for each status group.
 PRIORITY_DOT = {"high": ":red_circle:", "medium": ":large_yellow_circle:", "low": ":large_green_circle:"}
-STATUS_MARK = {"blocked": ":large_red_square:", "in_progress": ":large_blue_square:", "review": ":large_purple_square:", "todo": ":white_large_square:"}
+STATUS_MARK = {"blocked": ":large_red_square:", "in_progress": ":large_blue_square:", "review": ":large_purple_square:", "todo": ":white_large_square:", "done": ":large_green_square:"}
+HOME_MAX_DONE = 8  # the most recently completed tasks the Home tab lists; a done row is two blocks, so the tab stays under 100
+HOME_DONE_FETCH = 50  # how many done tasks the Home tab reads at most, newest first (home.py), so a long history costs nothing
+HOME_DONE_DESCRIPTION = 200  # characters of a done task's description shown on its row
 REASON_TITLE = {"blocked": "Why is it blocked?", "todo": "Why move it back?"}  # a modal's title is at most 24 characters
 
 
@@ -236,6 +239,26 @@ def _home_row(task: Task, today: date) -> dict:
     return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
 
 
+def _completed(task: Task) -> str:
+    """The day the task was marked Done, on the Indian calendar (a late completion is stored at midday of the day entered)."""
+    return task.closed_at.astimezone(SITE_TZ).strftime("%a %-d %b") if task.closed_at else "date not recorded"
+
+
+def _done_row(task: Task) -> dict:
+    """A finished task, read-only (no controls): what it was, when it was completed, its due date, the day it was assigned
+    (created) and its description, cut to a few lines."""
+    due = f"Due {_due(task.due_at)}" if task.due_at else "No due date"
+    lines = [
+        f"{PRIORITY_DOT.get(task.priority, PRIORITY_DOT['medium'])} *{task_code(task)}*  {escape(task.title)}",
+        " · ".join([f"Completed {_completed(task)}", due, f"Assigned {_created(task)}"]),
+    ]
+    description = " ".join(task.description.split())
+    if description:
+        cut = description[:HOME_DONE_DESCRIPTION].rstrip() + ("…" if len(description) > HOME_DONE_DESCRIPTION else "")
+        lines.append(escape(cut))
+    return {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}}
+
+
 def _stage_select(stages: list[str], chosen: str | None) -> dict:
     options = [{"text": {"type": "plain_text", "text": "All stages"}, "value": HOME_ALL}]
     options += [{"text": {"type": "plain_text", "text": s[:75]}, "value": s[:75]} for s in stages]
@@ -243,41 +266,47 @@ def _stage_select(stages: list[str], chosen: str | None) -> dict:
     return {"type": "static_select", "action_id": HOME_STAGE_ACTION, "options": options, "initial_option": initial}
 
 
-def _show_select(open_tasks: list[Task], chosen: str | None) -> dict:
-    """The "Show" dropdown at the top: all open tasks or one status, each with how many tasks it holds."""
-    options = [{"text": {"type": "plain_text", "text": f"All ({len(open_tasks)})"}, "value": HOME_ALL}]
+def _show_select(open_tasks: list[Task], done_count: int, chosen: str | None) -> dict:
+    """The "Show" dropdown at the top: everything or one status, each with how many tasks it holds. Done is last; past the
+    number of done tasks the tab reads it has no count, because the count would be wrong."""
+    options = [{"text": {"type": "plain_text", "text": f"All ({len(open_tasks) + done_count})"}, "value": HOME_ALL}]
     for status in HOME_ORDER:
         n = sum(t.status == status for t in open_tasks)
         options.append({"text": {"type": "plain_text", "text": f"{STATUS_LABEL[status]} ({n})"}, "value": status})
+    done_label = f"Done ({done_count})" if done_count < HOME_DONE_FETCH else "Done"
+    options.append({"text": {"type": "plain_text", "text": done_label}, "value": "done"})
     initial = next((o for o in options if o["value"] == (chosen or HOME_ALL)), options[0])
     return {"type": "static_select", "action_id": HOME_STATUS_FILTER_ACTION, "options": options, "initial_option": initial}
 
 
 def home_view(person: Person, tasks: list[Task], today: date, stage: str | None = None, status: str | None = None) -> dict:
     """The Home tab of the bot for `person`: their open tasks grouped by status (blocked first), each with its status dropdown
-    and Comment button. A Show dropdown (one status) and a Stage dropdown narrow the list. Done tasks are left out; at most
-    HOME_MAX_TASKS are shown."""
+    and Comment button, then the most recently completed tasks (HOME_MAX_DONE), read-only. A Show dropdown (one status, or
+    Done) and a Stage dropdown narrow the list. At most HOME_MAX_TASKS open tasks are shown."""
     open_tasks = [t for t in tasks if t.status != "done"]
-    stages = sorted({t.stage for t in open_tasks if t.stage}, key=str.lower)
+    done_tasks = sorted((t for t in tasks if t.status == "done"), key=lambda t: t.closed_at.timestamp() if t.closed_at else 0, reverse=True)
+    stages = sorted({t.stage for t in tasks if t.stage}, key=str.lower)
     shown = [t for t in open_tasks if (not stage or t.stage == stage) and (not status or t.status == status)]
+    shown_done = [t for t in done_tasks if (not stage or t.stage == stage) and status in (None, "", "done")]
     first_name = (person.name or "there").split()[0]
     overdue, soon = sum(is_overdue(t, today) for t in open_tasks), sum(is_due_soon(t, today) for t in open_tasks)
     summary = f"{len(open_tasks)} open"
     summary += f" · *{overdue} overdue*" if overdue else ""
     summary += f" · {soon} due in the next 2 days" if soon else ""
+    summary += f" · {len(done_tasks)}{'+' if len(done_tasks) >= HOME_DONE_FETCH else ''} done" if done_tasks else ""
+    anything = bool(open_tasks or done_tasks)
     blocks: list[dict] = [
         {"type": "header", "text": {"type": "plain_text", "text": f"Your tasks, {first_name}"[:150]}},
-        {"type": "context", "elements": [{"type": "mrkdwn", "text": summary if open_tasks else "Nothing open right now."}]},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": summary if anything else "Nothing open right now."}]},
     ]
-    if open_tasks:
+    if anything:
         legend = "  ".join(f"{dot} {name}" for name, dot in (("High", PRIORITY_DOT["high"]), ("Medium", PRIORITY_DOT["medium"]), ("Low", PRIORITY_DOT["low"])))
         blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"Priority  {legend}"}]})
-    if open_tasks:
-        filters = [_show_select(open_tasks, status)] + ([_stage_select(stages, stage)] if stages else [])
+        filters = [_show_select(open_tasks, len(done_tasks), status)] + ([_stage_select(stages, stage)] if stages else [])
         blocks.append({"type": "actions", "block_id": "wb_home_filter", "elements": filters})
-    if not shown:
-        if open_tasks:
-            blocks.append(_note("No open tasks match this filter. Choose All to see everything."))
+    if not shown and not shown_done:
+        if anything:
+            blocks.append(_note("No tasks match this filter. Choose All to see everything."))
         return {"type": "home", "blocks": blocks}
     count = 0
     for group_status in HOME_ORDER:
@@ -295,6 +324,14 @@ def home_view(person: Person, tasks: list[Task], today: date, stage: str | None 
             count += 1
     if count < len(shown):
         blocks.append(_note(f"Showing the first {count} of {len(shown)} tasks. Finish or move some to see the rest."))
+    if shown_done:
+        blocks += [{"type": "divider"}, {"type": "section", "text": {"type": "mrkdwn", "text": f"{STATUS_MARK['done']}  *{STATUS_LABEL['done']}*  ({len(shown_done)})"}}]
+        for index, task in enumerate(shown_done[:HOME_MAX_DONE]):
+            if index:
+                blocks.append({"type": "divider"})
+            blocks.append(_done_row(task))
+        if len(shown_done) > HOME_MAX_DONE:
+            blocks.append(_note(f"Showing the {HOME_MAX_DONE} most recently completed."))
     return {"type": "home", "blocks": blocks}
 
 

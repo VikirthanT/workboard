@@ -2,7 +2,7 @@
 redrawn after a move. Slack is a fake; people and work are made up."""
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -63,7 +63,14 @@ def rows(view):
     return [t for t in texts(view) if t.startswith(tuple(blocks.PRIORITY_DOT.values()))]
 
 
-def test_opening_the_home_tab_shows_only_that_persons_open_tasks_grouped_by_status(db, world, slack):
+def finish(db, task_id, days_ago=0):
+    """Mark a task Done the way a move does: the status, and the day it was closed."""
+    task = db.get(Task, uuid.UUID(task_id))
+    task.status, task.closed_at = "done", datetime.now(timezone.utc) - timedelta(days=days_ago)
+    db.commit()
+
+
+def test_opening_the_home_tab_shows_that_persons_open_tasks_grouped_by_status_then_their_done_ones(db, world, slack):
     create(world, "Ravis todo", world["ravi"])
     blocked = create(world, "Ravis blocked", world["ravi"])
     done = create(world, "Ravis done", world["ravi"])
@@ -77,10 +84,59 @@ def test_opening_the_home_tab_shows_only_that_persons_open_tasks_grouped_by_stat
     [(user, view)] = slack["homes"]
     assert user == "U0RAVI1234" and view["type"] == "home"
     found = rows(view)
-    assert len(found) == 2 and "Ravis blocked" in found[0] and "Ravis todo" in found[1]  # blocked first
-    assert "Meenas task" not in " ".join(texts(view)) and "Ravis done" not in " ".join(texts(view))
-    assert any("*Blocked*" in t for t in texts(view)) and any("*To Do*" in t for t in texts(view))
-    assert "2 open" in " ".join(texts(view))
+    assert len(found) == 3 and "Ravis blocked" in found[0] and "Ravis todo" in found[1]  # blocked first
+    assert "Ravis done" in found[2]  # the finished one comes last, under its own heading
+    assert "Meenas task" not in " ".join(texts(view))
+    assert any("*Blocked*" in t for t in texts(view)) and any("*To Do*" in t for t in texts(view)) and any("*Done*" in t for t in texts(view))
+    assert "2 open" in " ".join(texts(view)) and "1 done" in " ".join(texts(view))
+
+
+def test_a_done_row_has_what_it_was_when_it_finished_its_due_and_assigned_dates_and_no_buttons(db, world, slack):
+    due = (TODAY + timedelta(days=4)).isoformat()
+    task_id = create(world, "Design weld jig", world["ravi"], description="The jig\ndesign is ready.", due_at=due)
+    finish(db, task_id, days_ago=1)
+
+    home.publish("U0RAVI1234")
+
+    [(_, view)] = slack["homes"]
+    [row] = rows(view)
+    assert "Design weld jig" in row and "Completed " in row and "Due " in row and "Assigned " in row
+    assert "The jig design is ready." in row  # the description, its line breaks folded
+    assert not [b for b in view["blocks"] if b["type"] == "actions" and b.get("block_id") == f"wb_home_{task_id}"]  # no controls
+
+
+def test_only_the_latest_done_tasks_are_listed_newest_first_and_the_tab_stays_inside_slacks_limit(db, world, slack):
+    for n in range(blocks.HOME_MAX_DONE + 3):
+        finish(db, create(world, f"Finished {n}", world["ravi"]), days_ago=n)  # Finished 0 is the newest
+
+    home.publish("U0RAVI1234")
+
+    [(_, view)] = slack["homes"]
+    found = rows(view)
+    assert len(found) == blocks.HOME_MAX_DONE and "Finished 0" in found[0] and f"Finished {blocks.HOME_MAX_DONE - 1}" in found[-1]
+    assert any(f"Showing the {blocks.HOME_MAX_DONE} most recently completed" in t for t in texts(view)) and len(view["blocks"]) < 100
+
+
+def test_the_show_dropdown_can_pick_done_and_open_filters_leave_done_out(db, world, slack):
+    create(world, "Still open", world["ravi"])
+    finish(db, create(world, "Finished one", world["ravi"]))
+
+    home.publish("U0RAVI1234", status="done")
+    home.publish("U0RAVI1234", status="todo")
+
+    (_, only_done), (_, only_todo) = slack["homes"]
+    assert ["Finished one" in r for r in rows(only_done)] == [True] and ["Still open" in r for r in rows(only_todo)] == [True]
+    show = next(e for b in only_done["blocks"] if b.get("block_id") == "wb_home_filter" for e in b["elements"] if e["action_id"] == blocks.HOME_STATUS_FILTER_ACTION)
+    assert show["initial_option"]["value"] == "done" and show["initial_option"]["text"]["text"] == "Done (1)"
+
+
+def test_a_person_with_only_done_tasks_still_sees_them(db, world, slack):
+    finish(db, create(world, "Finished one", world["ravi"]))
+
+    home.publish("U0RAVI1234")
+
+    [(_, view)] = slack["homes"]
+    assert len(rows(view)) == 1 and "0 open" in " ".join(texts(view)) and "Nothing open right now." not in texts(view)
 
 
 def test_each_row_has_the_priority_dot_tags_due_date_and_the_cards_controls(db, world, slack):
@@ -141,7 +197,7 @@ def test_the_show_dropdown_counts_each_status_and_narrows_the_list_to_one(db, wo
 
     (_, everything), (_, only_blocked) = slack["homes"]
     show = filter_select(everything, blocks.HOME_STATUS_FILTER_ACTION)
-    assert [o["text"]["text"] for o in show["options"]] == ["All (3)", "Blocked (1)", "In Progress (0)", "Review (0)", "To Do (2)"]
+    assert [o["text"]["text"] for o in show["options"]] == ["All (3)", "Blocked (1)", "In Progress (0)", "Review (0)", "To Do (2)", "Done (0)"]
     assert show["initial_option"]["value"] == blocks.HOME_ALL and len(rows(everything)) == 3
     assert len(rows(only_blocked)) == 1 and "Stuck" in rows(only_blocked)[0]
     assert filter_select(only_blocked, blocks.HOME_STATUS_FILTER_ACTION)["initial_option"]["value"] == "blocked"
@@ -166,7 +222,7 @@ def test_a_filter_that_matches_nothing_says_so_and_keeps_the_dropdowns(db, world
     home.publish("U0RAVI1234", status="review")
 
     [(_, view)] = slack["homes"]
-    assert rows(view) == [] and any("No open tasks match this filter" in t for t in texts(view))
+    assert rows(view) == [] and any("No tasks match this filter" in t for t in texts(view))
     assert filter_select(view, blocks.HOME_STATUS_FILTER_ACTION)["initial_option"]["value"] == "review"
 
 
