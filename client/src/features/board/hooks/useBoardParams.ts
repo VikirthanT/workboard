@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import type { BoardFilter, BoardQuery } from '../../../app/types/types';
 
 const FILTERS: BoardFilter[] = ['overdue', 'due_week', 'blocked', 'needs_review'];
@@ -24,15 +23,13 @@ function load(key: string): View {
 }
 
 /**
- * The URL is only the page (`/`, `/boards/npi`): no ids, no filters. The view (attention tick, person, filters, search, open task)
- * is kept per team in sessionStorage, so a refresh or a trip to another page brings it back; it ends with the tab.
- * The header's "Needs review" link is the one exception: `/?filter=needs_review` is applied once, then dropped from the URL.
+ * The URL is only the page (`/`, `/boards/npi`): no ids, no filters. The view ("Needs attention", person, filters, search, open
+ * task) is kept per team in sessionStorage, so a refresh or a trip to another page brings it back; it ends with the tab.
  * Nothing here grants access: the server checks every request.
  */
 export function useBoardParams(teamId: string | null = null) {
   const key = `wb_board:${teamId ?? 'own'}`;
   const [view, setView] = useState<View>(() => load(key));
-  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
     try {
@@ -41,13 +38,6 @@ export function useBoardParams(teamId: string | null = null) {
       /* storage blocked: the view just won't survive a refresh */
     }
   }, [key, view]);
-
-  useEffect(() => {
-    const f = params.get('filter');
-    if (!f) return;
-    setView((v) => ({ ...v, filters: FILTERS.includes(f as BoardFilter) ? [f as BoardFilter] : v.filters }));
-    setParams({}, { replace: true });
-  }, [params, setParams]);
 
   const patch = (changes: Partial<View>) => setView((v) => ({ ...v, ...changes }));
 
@@ -64,7 +54,7 @@ export function useBoardParams(teamId: string | null = null) {
     setPerson: (personId: string | null) => patch({ personId }),
     setSearch: (search: string) => patch({ search }),
     toggleFilter: (f: BoardFilter) => patch({ filters: view.filters.includes(f) ? view.filters.filter((x) => x !== f) : [...view.filters, f] }),
-    clearFilters: () => patch({ filters: [] }),
+    clearFilters: () => patch({ filters: [], attention: false }), // "Needs attention" is one of the filters
     openTask: (taskId: string | null) => patch({ taskId }),
   };
 }

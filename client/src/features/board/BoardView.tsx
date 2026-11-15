@@ -4,9 +4,7 @@ import { ChartBar, Eye, Plus, UploadSimple, UsersThree } from '@phosphor-icons/r
 import { ErrorBoundary } from '../../app/components/ErrorBoundary';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
-import { Badge } from '../../app/components/ui/badge';
 import { Button } from '../../app/components/ui/button';
-import { CheckboxField } from '../../app/components/ui/checkbox';
 import { EmptyState } from '../../app/components/ui/empty-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../app/components/ui/select';
 import { useToast } from '../../app/components/ui/toast';
@@ -195,12 +193,6 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <BoardSearch value={p.query.search} onChange={p.setSearch} />
 
-        <CheckboxField
-          label={<span className="inline-flex items-center gap-1.5">Needs attention <Badge>{board.data.attentionCount}</Badge></span>}
-          checked={p.query.attention}
-          onCheckedChange={(c) => p.setAttention(c === true)}
-        />
-
         {board.data.people.length > 0 && (
           <div className="w-[200px]">
             <Select value={p.query.personId ?? 'everyone'} onValueChange={(v) => p.setPerson(v === 'everyone' ? null : v)}>
@@ -217,6 +209,7 @@ function BoardInner({ me, teams, teamId }: { me: Me; teams?: TeamRecord[]; teamI
           options={FILTERS}
           selected={p.query.filters}
           counts={board.data.filterCounts}
+          attention={{ checked: p.query.attention, count: board.data.attentionCount, onChange: p.setAttention }}
           onToggle={p.toggleFilter}
           onClear={p.clearFilters}
         />

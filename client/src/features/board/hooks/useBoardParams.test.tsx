@@ -59,9 +59,19 @@ describe('useBoardParams', () => {
     expect(result.current.query.filters).toEqual([]);
   });
 
-  it('applies the header link /?filter=needs_review once', () => {
+  it('clears "Needs attention" with the other filters, since it is one of them', () => {
+    const { result } = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    act(() => { result.current.setAttention(true); result.current.toggleFilter('blocked'); });
+    expect(result.current.query).toMatchObject({ attention: true, filters: ['blocked'] });
+
+    act(() => result.current.clearFilters());
+
+    expect(result.current.query).toMatchObject({ attention: false, filters: [] });
+  });
+
+  it('takes no filter from the URL: the header link that did is gone and the filters live in the Filters menu', () => {
     const { result } = renderHook(() => useBoardParams(), { wrapper: at('/?filter=needs_review') });
-    expect(result.current.query.filters).toEqual(['needs_review']);
+    expect(result.current.query.filters).toEqual([]);
   });
 
   it('ignores junk in storage and unknown filters', () => {
