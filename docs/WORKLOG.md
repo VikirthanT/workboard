@@ -73,6 +73,7 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - `134cb5f` Mark the manager's own row "(you)" on the Suggestions page.
 - `6c89bd8` Add a feature guide for stakeholders and engineers (`docs/FEATURE_GUIDE.md`).
 - `1c5bfe9` Plan: add quick-add from Slack and managed projects as later phases (`plan/PLAN.md`).
+- `0876a00` Give the login page the Watchtower layout. `client/src/features/auth/LoginPage.tsx` now has the split layout from the Watchtower app (copy left, sign-in card with a teal top edge right, `LoginPattern.tsx` block pattern top right, logo bottom left, one column below 820px); sizes and the fade-in are in `login-page.css`, the Google "G" in `client/src/assets/google-mark.svg`. Sign-in logic, error messages and the dev chooser are unchanged; the old "Work Board" label was left out. Checked: auth vitest 15 passed, `tsc --noEmit` clean, token grep clean. Not checked: the page in a browser (light, dark, phone width). `login-backdrop.css` is now unused and not yet deleted. The mockup (`docs/mockups/login-watchtower.html`) is gitignored, local only.
 
 **What changed.**
 - Search: the board only loads five cards per column, so the search runs on the server; searching the description or the assignee's name is not done.
