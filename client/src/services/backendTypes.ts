@@ -86,6 +86,17 @@ export interface WireStandupChannel {
   name: string;
 }
 
+export interface WireChannelName {
+  id: string;
+  name: string;
+}
+
+export interface WireChannelMembers {
+  channel_id: string;
+  members: { person: WireIdentity; state: string; team_name: string | null }[];
+  not_in_directory: number;
+}
+
 /** One page of a longer list (the server's `Page`). */
 export interface WirePage<T> {
   items: T[];

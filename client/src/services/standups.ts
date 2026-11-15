@@ -1,5 +1,5 @@
-import type { StandupChannel, Suggestion, SuggestionPatch, SuggestionsPage } from '../app/types/types';
-import type { WireStandupChannel, WireSuggestion, WireSuggestionsPage } from './backendTypes';
+import type { ChannelName, StandupChannel, Suggestion, SuggestionPatch, SuggestionsPage } from '../app/types/types';
+import type { WireChannelName, WireStandupChannel, WireSuggestion, WireSuggestionsPage } from './backendTypes';
 import { apiClient } from './axiosInstance';
 import { mapStandupChannel, mapSuggestion, mapSuggestionsPage } from './mappers';
 
@@ -7,6 +7,12 @@ import { mapStandupChannel, mapSuggestion, mapSuggestionsPage } from './mappers'
 export async function getStandupChannels(): Promise<StandupChannel[]> {
   const { data } = await apiClient.get<WireStandupChannel[]>('/standups/channels');
   return data.map(mapStandupChannel);
+}
+
+/** The name of a channel id (the standup app's list first, then Slack). The error says when it cannot be found. */
+export async function getChannelName(channelId: string): Promise<ChannelName> {
+  const { data } = await apiClient.get<WireChannelName>(`/standups/channels/${encodeURIComponent(channelId)}`);
+  return data;
 }
 
 /** Each person on the team with their latest standup and suggestions. The team's manager, or an admin (read only). */

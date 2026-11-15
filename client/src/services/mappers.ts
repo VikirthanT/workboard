@@ -1,11 +1,11 @@
 /* wire (snake_case) -> frontend (camelCase). The single boundary between backendTypes and app/types. */
 import type {
-  ActivityItem, AllTeamsReport, AuditEntry, BoardTeam, Me, Page, PersonRecord, PersonSummary, Priority, ReportBlock, Task, TaskReason,
+  ActivityItem, AllTeamsReport, AuditEntry, BoardTeam, ChannelMembers, Me, Page, PersonRecord, PersonSummary, Priority, ReportBlock, Task, TaskReason,
   StandupChannel, StandupPost, Suggestion, SuggestionKind, SuggestionsPage, SuggestionState, TeamRecord, TeamReport, TeamsBlock,
 } from '../app/types/types';
 import type { ReportCounts } from '../app/domain/report';
 import type {
-  WireActivity, WireAllTeamsReport, WireAudit, WireBoard, WireBoardTeam, WireIdentity, WirePage, WirePersonSummary,
+  WireActivity, WireAllTeamsReport, WireAudit, WireBoard, WireBoardTeam, WireChannelMembers, WireIdentity, WirePage, WirePersonSummary,
   WireReportBlock, WireReportCounts, WireStandupChannel, WireStandupPost, WireSuggestion, WireSuggestionsPage, WireTask, WireTeam,
   WireTeamReport, WireTeamsBlock,
 } from './backendTypes';
@@ -50,7 +50,17 @@ export const mapTeam = (t: WireTeam): TeamRecord => ({
   standupChannelId: t.standup_channel_id,
 });
 
-export const mapStandupChannel = (c: WireStandupChannel): StandupChannel => ({ id: c.slack_channel_id, name: c.name });
+export const mapChannelMembers = (c: WireChannelMembers): ChannelMembers => ({
+  channelId: c.channel_id,
+  members: c.members.map((m) => ({
+    person: mapPerson(m.person),
+    state: (['available', 'on_this_team', 'on_other_team'].includes(m.state) ? m.state : 'unavailable') as ChannelMembers['members'][number]['state'],
+    teamName: m.team_name,
+  })),
+  notInDirectory: c.not_in_directory,
+});
+
+export const mapStandupChannel =(c: WireStandupChannel): StandupChannel => ({ id: c.slack_channel_id, name: c.name });
 
 export const mapSuggestion = (s: WireSuggestion): Suggestion => ({
   id: s.id, personId: s.person_id, title: s.title, description: s.description, kind: s.kind as SuggestionKind,

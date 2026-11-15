@@ -12,6 +12,12 @@ class ChannelResponse(BaseModel):
     name: str
 
 
+class ChannelNameResponse(BaseModel):
+    """A Slack channel looked up by its id: the name Slack shows for it."""
+    id: str
+    name: str
+
+
 class SuggestionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

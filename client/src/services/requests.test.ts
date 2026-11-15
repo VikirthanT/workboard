@@ -2,9 +2,9 @@
    `GET /teams/{id}` 405) fails here. The mappers are replaced by pass-throughs: their output is tested in mappers.test.ts. */
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { apiClient } from './axiosInstance';
-import { addMember, changeManager, createTeam, deleteTeam, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
+import { addMember, addMembers, changeManager, createTeam, deleteTeam, getChannelMembers, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
 import { getAdmins, getAudit, searchPeople, setAdmin } from './admin';
-import { addSuggestions, editSuggestion, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from './standups';
+import { addSuggestions, editSuggestion, getChannelName, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from './standups';
 import { addComment, createTask, deleteTask, getBoard, getTask, moveTask, updateTask } from './tasks';
 import { getAllTeamsReport, getTeamReport } from './reports';
 import { devSignIn, endServerSession, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
@@ -75,6 +75,17 @@ describe('teams service', () => {
     expect(post).toHaveBeenLastCalledWith('/teams/t1/members', { person_id: 'p2', reason: undefined });
   });
 
+  it('reads the Slack channel members with GET and adds the ticked people together with POST', async () => {
+    get.mockResolvedValue({ data: { channel_id: 'C0NPI', members: [], not_in_directory: 0 } });
+    await getChannelMembers('t1');
+    expect(get).toHaveBeenLastCalledWith('/teams/t1/channel-members');
+
+    await addMembers({ teamId: 't1', personIds: ['p1', 'p2'], reason: 'from Slack' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/members/bulk', { person_ids: ['p1', 'p2'], reason: 'from Slack' });
+    await addMembers({ teamId: 't1', personIds: ['p1'], reason: '' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/members/bulk', { person_ids: ['p1'], reason: undefined });
+  });
+
   it('removes a member with DELETE /teams/{id}/members/{person}', async () => {
     await removeMember({ teamId: 't1', personId: 'p2', reason: 'left' });
     expect(del).toHaveBeenLastCalledWith('/teams/t1/members/p2', { data: { reason: 'left' } });
@@ -87,6 +98,14 @@ describe('standups service', () => {
   it('lists the standup channels with GET /standups/channels', async () => {
     await getStandupChannels();
     expect(get).toHaveBeenCalledWith('/standups/channels');
+  });
+
+  it('looks up a channel name by its id, escaping the id', async () => {
+    get.mockResolvedValue({ data: { id: 'C0NPI', name: 'standup-npi' } });
+    expect(await getChannelName('C0NPI')).toEqual({ id: 'C0NPI', name: 'standup-npi' });
+    expect(get).toHaveBeenLastCalledWith('/standups/channels/C0NPI');
+    await getChannelName('a/b');
+    expect(get).toHaveBeenLastCalledWith('/standups/channels/a%2Fb');
   });
 
   it('reads a team\'s suggestions with GET and syncs with POST (both return the page)', async () => {

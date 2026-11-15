@@ -2,7 +2,7 @@
    The payloads are synthetic. If the server's shape changes, this is where the client finds out. */
 import { describe, expect, it } from 'vitest';
 import type { WireActivity, WireBoardTeam, WireIdentity, WireTask } from './backendTypes';
-import { mapActivity, mapBoardTeam, mapPerson, mapRealMe, mapStandupChannel, mapSuggestionsPage, mapTask, mapTeam, runsTeam } from './mappers';
+import { mapActivity, mapBoardTeam, mapChannelMembers, mapPerson, mapRealMe, mapStandupChannel, mapSuggestionsPage, mapTask, mapTeam, runsTeam } from './mappers';
 
 const ravi = { id: 'p-ravi', name: 'Ravi', email: 'ravi@atimotors.com', active: true };
 const asha = { id: 'p-asha', name: 'Asha', email: 'asha@atimotors.com', active: true };
@@ -27,6 +27,28 @@ describe('server team and standup channel -> client', () => {
     expect(mapTeam(wire).standupChannelId).toBe('C0NPI');
     expect(mapTeam({ ...wire, standup_channel_id: null }).standupChannelId).toBeNull();
     expect(mapStandupChannel({ slack_channel_id: 'C0NPI', name: 'standup-npi' })).toEqual({ id: 'C0NPI', name: 'standup-npi' });
+  });
+});
+
+describe('server Slack channel members -> client', () => {
+  const wirePerson = { id: 'p1', name: 'Meena', email: 'meena@example.test', slack_user_id: 'U1', role: 'member', is_admin: false, active: true, team_id: null, team_name: null };
+
+  it('maps each person with what adding them would do, and treats an unknown state as unavailable', () => {
+    const mapped = mapChannelMembers({
+      channel_id: 'C0NPI',
+      members: [
+        { person: wirePerson, state: 'available', team_name: null },
+        { person: { ...wirePerson, id: 'p2' }, state: 'on_other_team', team_name: 'QA' },
+        { person: { ...wirePerson, id: 'p3' }, state: 'something_new', team_name: null },
+      ],
+      not_in_directory: 4,
+    });
+
+    expect(mapped.channelId).toBe('C0NPI');
+    expect(mapped.notInDirectory).toBe(4);
+    expect(mapped.members.map((m) => [m.person.displayName, m.state, m.teamName])).toEqual([
+      ['Meena', 'available', null], ['Meena', 'on_other_team', 'QA'], ['Meena', 'unavailable', null],
+    ]);
   });
 });
 

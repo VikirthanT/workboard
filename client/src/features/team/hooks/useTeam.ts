@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ADMINS_KEY, AUDIT_KEY, BOARD_KEY, ME_KEY, TEAMS_KEY, UNASSIGNED_KEY, getTeamMembersKey, getUnassignedKey } from '../../../app/constants/queryKeys';
-import { addMember, getTeamMembers, removeMember, searchUnassignedPeople } from '../../../services/api';
+import { ADMINS_KEY, AUDIT_KEY, BOARD_KEY, ME_KEY, TEAMS_KEY, UNASSIGNED_KEY, getChannelMembersKey, getTeamMembersKey, getUnassignedKey } from '../../../app/constants/queryKeys';
+import { addMember, addMembers, getChannelMembers, getTeamMembers, removeMember, searchUnassignedPeople } from '../../../services/api';
 
 /** A team's people, manager first. Admins can open any team; a manager only their own. */
 export function useTeamMembers(teamId: string | null) {
@@ -21,6 +21,18 @@ export function useRefreshTeams() {
 export function useAddMember(teamId: string) {
   const refresh = useRefreshTeams();
   return useMutation({ mutationFn: (v: { personId: string; reason: string }) => addMember({ teamId, ...v }), onSuccess: refresh });
+}
+
+/** Who is in the team's Slack channel, read when the review opens (never cached: it is a live look at Slack). No retry: the
+ *  server's answer ("no channel set", "channel not found", "invite the bot") is what the dialog shows. */
+export function useChannelMembers(teamId: string, enabled: boolean) {
+  return useQuery({ queryKey: getChannelMembersKey(teamId), queryFn: () => getChannelMembers(teamId), enabled, retry: false, gcTime: 0 });
+}
+
+/** The ticked people onto the team together; like any membership change it refreshes the lists, counts and audit. */
+export function useAddMembers(teamId: string) {
+  const refresh = useRefreshTeams();
+  return useMutation({ mutationFn: (v: { personIds: string[]; reason: string }) => addMembers({ teamId, ...v }), onSuccess: refresh });
 }
 
 export function useRemoveMember(teamId: string) {

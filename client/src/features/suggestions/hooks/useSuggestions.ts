@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BOARD_KEY, getSuggestionsKey, ME_KEY, REPORT_KEY, SUGGESTIONS_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
+import { BOARD_KEY, getSuggestionsKey, ME_KEY, REPORT_KEY, STANDUP_CHANNELS_KEY, SUGGESTIONS_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
 import type { SuggestionPatch, SuggestionsPage } from '../../../app/types/types';
 import { addSuggestions, editSuggestion, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from '../../../services/api';
 import { pendingCount } from '../pendingCount';
@@ -35,7 +35,11 @@ export function useSyncSuggestions(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (personId?: string) => syncSuggestions({ teamId, personId }),
-    onSuccess: (page: SuggestionsPage) => qc.setQueryData(getSuggestionsKey(teamId), page),
+    onSuccess: (page: SuggestionsPage) => {
+      qc.setQueryData(getSuggestionsKey(teamId), page);
+      // The standup app may have gained channels since the list was last read: the pickers read it again.
+      void qc.invalidateQueries({ queryKey: STANDUP_CHANNELS_KEY });
+    },
   });
 }
 

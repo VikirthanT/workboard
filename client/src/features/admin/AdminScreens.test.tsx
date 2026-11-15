@@ -35,6 +35,8 @@ vi.mock('./PersonDialogs', () => ({
   AdminToggleDialog: ({ person }: { person: { displayName: string } }) => <div>revoke-open {person.displayName}</div>,
 }));
 vi.mock('../team/AddMemberDialog', () => ({ AddMemberDialog: () => null }));
+vi.mock('../team/PullFromSlackDialog', () => ({ PullFromSlackDialog: ({ team }: { team: { name: string } | null }) => team && <div>pull-open {team.name}</div> }));
+vi.mock('../../app/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('../team/RemoveMemberDialog', () => ({ RemoveMemberDialog: () => null }));
 
 const admin = { user: { id: 'u1' }, isAdmin: true };
@@ -84,6 +86,18 @@ describe('TeamsView', () => {
     render(<TeamsView />);
     await userEvent.click(screen.getByRole('button', { name: 'Standup channel of Beta' }));
     expect(screen.getByText('channel-open Beta')).toBeInTheDocument();
+  });
+
+  it('pulls people from Slack for any team, but only once the team has a standup channel', async () => {
+    h.teams = loaded([team({ id: 't1', name: 'Alpha', standupChannelId: 'C0A' }), team({ id: 't2', name: 'Beta' })]);
+    h.members = [loaded([]), loaded([])];
+    render(<TeamsView />);
+
+    const [alphaButton, betaButton] = screen.getAllByRole('button', { name: /Pull from Slack/ });
+    expect(betaButton).toBeDisabled(); // no channel set: nothing to read
+    expect(alphaButton).toBeEnabled();
+    await userEvent.click(alphaButton);
+    expect(screen.getByText('pull-open Alpha')).toBeInTheDocument();
   });
 
   it('shows the empty state, whose button opens Create team', async () => {

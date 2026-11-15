@@ -34,6 +34,30 @@ class PersonResponse(BaseModel):
     open_task_count: int | None = None
 
 
+class MembersAdd(BaseModel):
+    """Several people onto one team in one go (the Slack channel review). All or none are added."""
+
+    person_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)
+
+
+class ChannelMemberResponse(BaseModel):
+    """One person from the team's Slack channel who is in the directory. `state` says what adding them would do:
+    `available` (on no team), `on_this_team`, `on_other_team` (`team_name` says which) or `unavailable` (inactive, or a
+    manager, who cannot be added as a member)."""
+
+    person: PersonResponse
+    state: str
+    team_name: str | None = None
+
+
+class ChannelMembersResponse(BaseModel):
+    channel_id: str
+    members: list[ChannelMemberResponse]
+    # Slack members the directory does not know (bots, guests, people not loaded): they cannot be added from here.
+    not_in_directory: int
+
+
 class DevAccount(BaseModel):
     """One line of the dev sign-in list. `can_sign_in` is false for people the server will refuse."""
 

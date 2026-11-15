@@ -16,6 +16,7 @@ vi.mock('./hooks', () => ({
   useCreateTeam: () => ({ mutate: h.mutate, isPending: false }),
   useSetStandupChannel: () => ({ mutate: h.mutate, isPending: false }),
   useStandupChannels: () => h.channels,
+  useChannelName: () => ({ data: undefined, isError: false, error: null }),
   useDeleteTeam: () => ({ mutate: h.mutate, isPending: false }),
   useChangeManager: () => ({ mutate: h.mutate, isPending: false }),
   useSetAdmin: () => ({ mutate: h.mutate, isPending: false }),

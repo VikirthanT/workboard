@@ -391,10 +391,33 @@ export interface SuggestionPatch {
   dueAt?: string | null;
 }
 
-/** A channel in the standup app: `id` is what a team stores. */
+/** A channel in the standup app: `id` is what a team stores. The list is read live from the standup database. */
 export interface StandupChannel {
   id: string;
   name: string;
+}
+
+/** A channel looked up by its id (the standup app's list first, then Slack): the name to show beside it. */
+export interface ChannelName {
+  id: string;
+  name: string;
+}
+
+/** What adding a person from the team's Slack channel would do: `available` can be added, the rest cannot and say why. */
+export type ChannelMemberState = 'available' | 'on_this_team' | 'on_other_team' | 'unavailable';
+
+export interface ChannelMember {
+  person: PersonRecord;
+  state: ChannelMemberState;
+  /** For `on_other_team`: which team. */
+  teamName: string | null;
+}
+
+/** Who is in a team's Slack channel and in the directory; `notInDirectory` counts the Slack members the directory does not know. */
+export interface ChannelMembers {
+  channelId: string;
+  members: ChannelMember[];
+  notInDirectory: number;
 }
 
 export type TeamRole = 'member' | 'manager';

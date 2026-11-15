@@ -62,6 +62,30 @@ def open_dm(token: str, slack_user_id: str) -> str:
     return _call(token, "conversations.open", json={"users": slack_user_id})["channel"]["id"]
 
 
+CHANNEL_PAGE = 200  # Slack's advised page size for the members list
+CHANNEL_MAX_PAGES = 50  # 10,000 members: far more than any one channel here, and a stop if Slack kept sending cursors
+
+
+def channel_member_ids(token: str, channel: str) -> list[str]:
+    """The Slack user id of everyone in the channel, following Slack's pages. A private channel only answers if the bot is in it.
+    Raises SlackError with Slack's own code (`channel_not_found`, `not_in_channel`, ...)."""
+    ids: list[str] = []
+    cursor = ""
+    for _ in range(CHANNEL_MAX_PAGES):
+        data = {"channel": channel, "limit": CHANNEL_PAGE, **({"cursor": cursor} if cursor else {})}
+        body = _call(token, "conversations.members", data=data)  # a read method: Slack wants a form body, not JSON
+        ids += [m for m in body.get("members", []) if isinstance(m, str)]
+        cursor = (body.get("response_metadata") or {}).get("next_cursor") or ""
+        if not cursor:
+            break
+    return ids
+
+
+def channel_name(token: str, channel: str) -> str:
+    """The channel's name as Slack shows it, without the #. Raises SlackError with Slack's own code (`channel_not_found`, ...)."""
+    return _call(token, "conversations.info", data={"channel": channel})["channel"]["name"]
+
+
 def _content(text: str, blocks: list[dict], color: str | None) -> dict:
     """The message body. With a `color` the blocks go inside an attachment, which is the only way Slack draws a coloured bar
     down the side of a message. Slack shows a top-level `text` above an attachment, which would only repeat what the card

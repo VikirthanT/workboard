@@ -1,8 +1,8 @@
 import { keepPreviousData, useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { ADMINS_KEY, getAdminCandidatesKey, getAuditKey, getTeamMembersKey, STANDUP_CHANNELS_KEY, TEAMS_KEY } from '../../../app/constants/queryKeys';
+import { ADMINS_KEY, getAdminCandidatesKey, getAuditKey, getChannelNameKey, getTeamMembersKey, STANDUP_CHANNELS_KEY, TEAMS_KEY } from '../../../app/constants/queryKeys';
 import type { TeamRecord } from '../../../app/types/types';
 import {
-  changeManager, createTeam, deleteTeam, getAdmins, getAudit, getStandupChannels, getTeamMembers, getTeams, searchPeople, setAdmin,
+  changeManager, createTeam, deleteTeam, getAdmins, getAudit, getChannelName, getStandupChannels, getTeamMembers, getTeams, searchPeople, setAdmin,
   setStandupChannel,
 } from '../../../services/api';
 import { useRefreshTeams } from '../../team/hooks';
@@ -54,6 +54,18 @@ export function useChangeManager() {
 /** The standup app's channels for the picker. Loaded only while a dialog that needs them is open; no retry, since a 501 means "not set up". */
 export function useStandupChannels(enabled: boolean) {
   return useQuery({ queryKey: STANDUP_CHANNELS_KEY, queryFn: getStandupChannels, enabled, retry: false });
+}
+
+/** The name of one channel id, for the team header and the typed-id hint: the server answers from the standup app's list, then Slack. */
+export function useChannelName(channelId: string | null | undefined, enabled = true) {
+  const id = (channelId ?? '').trim();
+  return useQuery({
+    queryKey: getChannelNameKey(id),
+    queryFn: () => getChannelName(id),
+    enabled: enabled && id.length >= 3,
+    retry: false,
+    staleTime: 10 * 60 * 1000, // a channel's name rarely changes
+  });
 }
 
 export function useSetStandupChannel() {

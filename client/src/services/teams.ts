@@ -1,7 +1,7 @@
-import type { PersonRecord, TeamRecord } from '../app/types/types';
-import type { WireIdentity, WirePage, WireTeam } from './backendTypes';
+import type { ChannelMembers, PersonRecord, TeamRecord } from '../app/types/types';
+import type { WireChannelMembers, WireIdentity, WirePage, WireTeam } from './backendTypes';
 import { apiClient } from './axiosInstance';
-import { mapPage, mapPerson, mapTeam } from './mappers';
+import { mapChannelMembers, mapPage, mapPerson, mapTeam } from './mappers';
 
 /** Admin: every team. Manager: only their own. */
 export async function getTeams(): Promise<TeamRecord[]> {
@@ -47,6 +47,17 @@ export async function searchUnassignedPeople(q: string): Promise<PersonRecord[]>
 /** The reason is optional for a manager adding to their own team, required by the server for nobody else's. */
 export async function addMember(p: { teamId: string; personId: string; reason: string }): Promise<void> {
   await apiClient.post(`/teams/${p.teamId}/members`, { person_id: p.personId, reason: p.reason || undefined });
+}
+
+/** Who is in the team's Slack channel and in the directory, for the review before pulling them in. Admin: any team; manager: their own. */
+export async function getChannelMembers(teamId: string): Promise<ChannelMembers> {
+  const { data } = await apiClient.get<WireChannelMembers>(`/teams/${teamId}/channel-members`);
+  return mapChannelMembers(data);
+}
+
+/** The ticked people onto the team in one go: all of them or none. The reason is optional. */
+export async function addMembers(p: { teamId: string; personIds: string[]; reason: string }): Promise<void> {
+  await apiClient.post(`/teams/${p.teamId}/members/bulk`, { person_ids: p.personIds, reason: p.reason || undefined });
 }
 
 /** Frees the person for another team. Their open tasks stay and show as needing a new owner. */

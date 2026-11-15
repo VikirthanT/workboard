@@ -57,16 +57,31 @@ def add_member(db: Session, actor: Person, team_id: uuid.UUID, person_id: uuid.U
     team = get_team(db, team_id)
     require_team_access(actor, team)
     reason_text = audit.clean_reason(reason, required=False)  # adding is routine: optional for admins too
-    person = get_person(db, person_id, lock=True)
+    _put_on_team(db, actor, team, get_person(db, person_id, lock=True), reason_text)
+    db.commit()
+
+
+def add_members(db: Session, actor: Person, team_id: uuid.UUID, person_ids: list[uuid.UUID], reason: str | None) -> None:
+    """Put several people on the team in one transaction: if any of them cannot be added, none are, and the error says which.
+    Same access and rules as `add_member` (an admin on any team, a manager on their own); one audit row per person."""
+    team = get_team(db, team_id)
+    require_team_access(actor, team)
+    reason_text = audit.clean_reason(reason, required=False)
+    for person_id in dict.fromkeys(person_ids):  # in the order given, each once
+        _put_on_team(db, actor, team, get_person(db, person_id, lock=True), reason_text)
+    db.commit()
+
+
+def _put_on_team(db: Session, actor: Person, team: Team, person: Person, reason_text: str | None) -> None:
+    """The rules for adding one person, and the change and its audit row; the caller commits."""
     if not person.active:
-        raise AppError("person_inactive", "That person is inactive.", 409)
+        raise AppError("person_inactive", f"{person.name} is inactive.", 409)
     if person.team_id is not None:
-        raise AppError("already_on_team", "That person is already on a team.", 409)
+        raise AppError("already_on_team", f"{person.name} is already on a team.", 409)
     if person.role == ROLE_MANAGER:
-        raise AppError("person_unavailable", "Managers cannot be added as members.", 409)
+        raise AppError("person_unavailable", f"{person.name} is a manager and cannot be added as a member.", 409)
     person.team_id = team.id
     audit.record(db, actor, states.MEMBER_ADD, team_id=team.id, person_id=person.id, reason=reason_text)
-    db.commit()
 
 
 def remove_member(db: Session, actor: Person, team_id: uuid.UUID, person_id: uuid.UUID, reason: str | None) -> None:

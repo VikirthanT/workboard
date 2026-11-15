@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/u
 import type { PersonRecord, TeamRecord } from '../../app/types/types';
 import { useCurrentUser } from '../../hooks';
 import { errorMessage } from '../../services/api';
-import { AddMemberDialog, filterMembers, PeopleFilters, PeopleHeader, TeamSection, type RoleFilter } from '../team';
+import { useToast } from '../../app/components/ui/toast';
+import { AddMemberDialog, filterMembers, PeopleFilters, PeopleHeader, PullFromSlackDialog, TeamSection, type RoleFilter } from '../team';
 import { RemoveMemberDialog } from '../team/RemoveMemberDialog';
 import { AdminsPanel } from './AdminsPanel';
 import { AuditLog } from './AuditLog';
@@ -35,6 +36,8 @@ export function TeamsView() {
   const [role, setRole] = useState<RoleFilter>('all');
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState<TeamRecord | null>(null);
+  const [pulling, setPulling] = useState<TeamRecord | null>(null);
+  const { toast } = useToast();
   const [deleting, setDeleting] = useState<TeamRecord | null>(null);
   const [editingChannel, setEditingChannel] = useState<TeamRecord | null>(null);
   const [removing, setRemoving] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
@@ -96,6 +99,7 @@ export function TeamsView() {
                   members={shown}
                   totalMembers={all.length}
                   onAdd={() => setAdding(team)}
+                  onPullFromSlack={() => setPulling(team)}
                   onDeleteTeam={() => setDeleting(team)}
                   onEditChannel={() => setEditingChannel(team)}
                   channelName={team.standupChannelId ? channelNames.get(team.standupChannelId) : undefined}
@@ -119,6 +123,14 @@ export function TeamsView() {
       <DeleteTeamDialog team={deleting} onClose={() => setDeleting(null)} />
       <EditStandupChannelDialog team={editingChannel} onClose={() => setEditingChannel(null)} />
       {adding && <AddMemberDialog open teamId={adding.id} teamName={adding.name} reasonOptional onClose={() => setAdding(null)} />}
+      <PullFromSlackDialog
+        team={pulling}
+        reasonOptional
+        onClose={(added) => {
+          if (added && pulling) toast(`${added} ${added === 1 ? 'person' : 'people'} added to ${pulling.name}.`, 'success');
+          setPulling(null);
+        }}
+      />
       {removing && <RemoveMemberDialog team={removing.team} person={removing.person} reasonOptional={false} onClose={() => setRemoving(null)} />}
       {promoting && <ManagerChangeDialog team={promoting.team} person={promoting.person} onClose={() => setPromoting(null)} />}
       {adminChange && <AdminToggleDialog person={adminChange.person} isAdmin={adminChange.isAdmin} onClose={() => setAdminChange(null)} />}
