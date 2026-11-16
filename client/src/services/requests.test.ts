@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { apiClient } from './axiosInstance';
 import { addMember, addMembers, changeManager, createTeam, deleteTeam, getChannelMembers, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
 import { getAdmins, getAudit, searchPeople, setAdmin } from './admin';
-import { addSuggestions, editSuggestion, getChannelName, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from './standups';
+import { addSuggestions, editSuggestion, getChannelName, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, suggestTasks, syncSuggestions } from './standups';
 import { addComment, createTask, deleteTask, getBoard, getTask, moveTask, updateTask } from './tasks';
 import { getAllTeamsReport, getTeamReport } from './reports';
 import { devSignIn, endServerSession, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
@@ -115,9 +115,11 @@ describe('standups service', () => {
     expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync');
   });
 
-  it('syncs one person alone with the person_id query parameter', async () => {
-    await syncSuggestions({ teamId: 't1', personId: 'p2' });
-    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync', undefined, { params: { person_id: 'p2' } });
+  it('suggests for the team with POST, or for one person with the person_id query parameter', async () => {
+    await suggestTasks({ teamId: 't1' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/suggest');
+    await suggestTasks({ teamId: 't1', personId: 'p2' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/suggest', undefined, { params: { person_id: 'p2' } });
   });
 
   it('adds suggestions with POST, the ids in snake_case and the due dates by suggestion id', async () => {

@@ -28,21 +28,40 @@ from standups.states import week_start
 STATUS_LABEL = {"todo": "To Do", "in_progress": "In Progress", "blocked": "Blocked", "review": "Review"}
 
 
-def sync_team(db: Session, actor: Person, team_id: uuid.UUID, person_id: uuid.UUID | None = None) -> None:
-    """Read the team's standup channel. With `person_id`, read only that person's posts, so a manager can go one person
-    at a time (one model call at a time, and one failure or rate limit costs only that person)."""
+def sync_team(db: Session, actor: Person, team_id: uuid.UUID) -> None:
+    """Read the team's standup channel (no model call): check the standup database can be read, drop suggestions past
+    their keep time and record the look as the team's "Last sync"."""
     team = get_team(db, team_id)
     require_sync_standups(actor, team)
-    _sync(db, team, person_id)
+    _read(db, team)
+
+
+def suggest_team(db: Session, actor: Person, team_id: uuid.UUID, person_id: uuid.UUID | None = None) -> None:
+    """Ask the model for tasks from the team's standup posts. With `person_id`, only that person's posts, so a manager can
+    go one person at a time (one model call at a time, and one failure or rate limit costs only that person)."""
+    team = get_team(db, team_id)
+    require_sync_standups(actor, team)
+    _suggest(db, team, person_id)
 
 
 def sync_team_scheduled(db: Session, team_id: uuid.UUID) -> None:
-    """The same read for the scheduler (`standups.scheduler`): nobody is signed in, so there is no actor to check. It only
+    """Both steps for the scheduler (`standups.scheduler`): nobody is signed in, so there is no actor to check. It only
     proposes suggestions, which wait for the manager to review; it never creates a task."""
-    _sync(db, get_team(db, team_id), None)
+    team = get_team(db, team_id)
+    _read(db, team)
+    _suggest(db, team, None)
 
 
-def _sync(db: Session, team: Team, person_id: uuid.UUID | None) -> None:
+def _read(db: Session, team: Team) -> None:
+    if not team.standup_channel_id:
+        raise AppError("standup_channel_not_set", "This team has no standup channel yet. Ask an admin to set one.", 409)
+    reader.list_submissions(team.standup_channel_id, week_start(date.today()))  # raises when the standup database is not set up
+    suggestions_service.expire(db, team.id)
+    team.standup_synced_at = datetime.now(timezone.utc)
+    db.commit()
+
+
+def _suggest(db: Session, team: Team, person_id: uuid.UUID | None) -> None:
     if not team.standup_channel_id:
         raise AppError("standup_channel_not_set", "This team has no standup channel yet. Ask an admin to set one.", 409)
     members = list(db.scalars(select(Person).where(Person.team_id == team.id)))
@@ -88,10 +107,6 @@ def _sync(db: Session, team: Team, person_id: uuid.UUID | None) -> None:
             db.add(StandupRead(team_id=team.id, source_submission_id=sub.id, content_hash=digest))
         else:
             read.content_hash, read.read_at = digest, datetime.now(timezone.utc)
-        db.commit()
-
-    if person_id is None:  # a look at the whole team, found anything or not; one person's read says nothing about the rest
-        team.standup_synced_at = datetime.now(timezone.utc)
         db.commit()
 
 

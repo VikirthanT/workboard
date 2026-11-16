@@ -1,6 +1,6 @@
 # suggestions
 
-Tasks proposed from the team's standup posts, for the manager to review. A sync reads the team's standup channel (set by an admin on the team), asks a language model which tasks are worth tracking, and stores them as suggestions. Nothing is on the board until the manager adds it. The server owns every rule (who may do what, the 3-day keep time, what a task needs); this feature only calls the API and shows what comes back. Server side: `server/standups/README.md`.
+Tasks proposed from the team's standup posts, for the manager to review. Sync reads the team's standup channel (set by an admin on the team) and shows each person's latest post; Suggest, one person at a time, asks a language model which tasks are worth tracking and stores them as suggestions. Nothing is on the board until the manager adds it. The server owns every rule (who may do what, the 3-day keep time, what a task needs); this feature only calls the API and shows what comes back. Server side: `server/standups/README.md`.
 
 Built so far: the data layer (below). The page, the header link and the dialogs are next, from `docs/mockups/suggestions.html`.
 
@@ -9,7 +9,8 @@ Built so far: the data layer (below). The page, the header link and the dialogs 
 | Method and path | Where it is called | What it does |
 |---|---|---|
 | `GET /api/teams/{id}/suggestions` | `services/standups.ts` `getSuggestions`, `hooks/useSuggestions.ts` `useSuggestions`, `usePendingSuggestionCount` | Each person with their latest standup (three sections) and suggestions |
-| `POST /api/teams/{id}/suggestions/sync` | `syncSuggestions`, `useSyncSuggestions` | Read the channel, propose tasks, return the page |
+| `POST /api/teams/{id}/suggestions/sync` | `syncSuggestions`, `useSyncSuggestions` | The page's **Sync** button: read the channel (no model call), record "Last sync", return the page |
+| `POST /api/teams/{id}/suggestions/suggest?person_id=` | `suggestTasks`, `useSuggestTasks` | The top **Suggest** button (everyone) and the per-person **Suggest for <name>** button: run the model on the posts, return the page |
 | `POST /api/teams/{id}/suggestions/add` | `addSuggestions`, `useAddSuggestions` | Create a task from each chosen suggestion (all or nothing); also refreshes the board. Every task needs a due date: the Add dialog shows a required date picker per ticked suggestion (its own date, or empty, or one that has passed), Create stays disabled until each has one, and the dates are sent by suggestion id. The server refuses an add without them. |
 | `PATCH /api/suggestions/{id}` | `editSuggestion`, `useEditSuggestion` | Change a pending suggestion; only the fields given |
 | `POST /api/suggestions/{id}/reject` | `rejectSuggestion`, `useRejectSuggestion` | Reject (restorable for 3 days) |

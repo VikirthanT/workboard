@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   suggestionsFor: vi.fn(),
   page: {} as Record<string, unknown>,
   sync: vi.fn(),
+  suggest: vi.fn(),
   reject: vi.fn(),
   restore: vi.fn(),
   toast: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../admin', () => ({ useTeams: () => ({ data: h.teams, isError: false })
 vi.mock('./hooks', () => ({
   useSuggestions: (teamId: string) => { h.suggestionsFor(teamId); return h.page; },
   useSyncSuggestions: () => ({ mutate: h.sync, isPending: false }),
+  useSuggestTasks: () => ({ mutate: h.suggest, isPending: false }),
   useRejectSuggestion: () => ({ mutate: h.reject, isPending: false }),
   useRestoreSuggestion: () => ({ mutate: h.restore, isPending: false }),
 }));
@@ -77,7 +79,7 @@ describe('SuggestionsView for an admin', () => {
     expect(screen.getByRole('combobox', { name: 'Team' })).toHaveTextContent('NPI (Asha Rao)');
     expect(screen.getByText(/Read-only view of NPI/)).toBeInTheDocument();
     expect(screen.getByText('Design weld jig')).toBeInTheDocument(); // the suggestions are there to read
-    expect(screen.getByRole('button', { name: /Sync now/ })).toBeEnabled(); // an admin may sync, to check the connection
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled(); // an admin may sync, to check the connection
     expect(screen.queryByRole('button', { name: /^Add \(/ })).not.toBeInTheDocument();
     for (const name of ['Select', 'Edit', 'Reject', 'Restore']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
   });
@@ -88,7 +90,7 @@ describe('SuggestionsView for an admin', () => {
     render(<SuggestionsView />);
 
     expect(h.suggestionsFor).toHaveBeenLastCalledWith('t2'); // their own team first
-    expect(screen.getByRole('button', { name: /Sync now/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add (0)' })).toBeInTheDocument();
   });
 
@@ -125,7 +127,7 @@ describe('SuggestionsView', () => {
     h.page = loaded([asha], { standupChannelId: null });
     render(<SuggestionsView />);
     expect(screen.getByText('No standup channel yet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Sync now/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeDisabled();
   });
 
   it('explains when the standup posts cannot be read, instead of saying nobody posted, and still shows the suggestions', () => {
@@ -230,28 +232,33 @@ describe('SuggestionsView', () => {
     expect(h.restore).toHaveBeenCalledWith('s2', expect.anything());
   });
 
-  it('locks every Sync button while one sync runs, so a double click is one sync, and unlocks when it ends', async () => {
+  it('locks Sync and Suggest while one runs, so a double click is one call, and unlocks when it ends', async () => {
     render(<SuggestionsView />);
-    const sync = screen.getByRole('button', { name: /Sync now/ });
+    const sync = screen.getByRole('button', { name: 'Sync' });
 
     await userEvent.dblClick(sync); // two presses before the first sync has finished
-    await userEvent.click(screen.getByRole('button', { name: 'Sync Ravi' })); // another Sync button, same lock
+    await userEvent.click(screen.getByRole('button', { name: 'Suggest for Ravi' })); // the other button, same lock
     expect(h.sync).toHaveBeenCalledTimes(1);
+    expect(h.suggest).not.toHaveBeenCalled();
 
     h.sync.mock.calls[0][1].onSettled(); // the sync ends
     await userEvent.click(sync);
     expect(h.sync).toHaveBeenCalledTimes(2);
   });
 
-  it('syncs everyone on demand, or one person at a time', async () => {
-    h.sync.mockImplementation((_person, options) => options.onSettled()); // each sync finishes before the next press
+  it('syncs the whole team with Sync, and suggests one person at a time with Suggest', async () => {
+    h.sync.mockImplementation((_arg, options) => options.onSettled());
+    h.suggest.mockImplementation((_person, options) => options.onSettled()); // each call finishes before the next press
     render(<SuggestionsView />);
-    await userEvent.click(screen.getByRole('button', { name: /Sync now/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sync' }));
     expect(h.sync).toHaveBeenLastCalledWith(undefined, expect.anything());
-    await userEvent.click(screen.getByRole('button', { name: 'Sync Ravi' })); // Ravi is the open person
-    expect(h.sync).toHaveBeenLastCalledWith('p-ravi', expect.anything());
+    expect(screen.queryByRole('button', { name: /^Sync (Ravi|Asha)/ })).not.toBeInTheDocument(); // no per-person sync
+    await userEvent.click(screen.getByRole('button', { name: 'Suggest' })); // the master Suggest: everyone at once
+    expect(h.suggest).toHaveBeenLastCalledWith(undefined, expect.anything());
+    await userEvent.click(screen.getByRole('button', { name: 'Suggest for Ravi' })); // Ravi is the open person
+    expect(h.suggest).toHaveBeenLastCalledWith('p-ravi', expect.anything());
     await userEvent.click(screen.getByRole('button', { name: /Asha/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Sync Asha' }));
-    expect(h.sync).toHaveBeenLastCalledWith('p-asha', expect.anything());
+    await userEvent.click(screen.getByRole('button', { name: 'Suggest for Asha' }));
+    expect(h.suggest).toHaveBeenLastCalledWith('p-asha', expect.anything());
   });
 });

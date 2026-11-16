@@ -85,11 +85,11 @@ def test_a_sync_asks_only_for_this_weeks_standups(world):
 def test_a_scheduled_sync_asks_only_for_this_weeks_standups_too(db, world):
     sync.sync_team_scheduled(db, uuid.UUID(world["team"]["id"]))
 
-    assert [since for _, since in world["channels"]] == [week_start(TODAY)]
+    assert {since for _, since in world["channels"]} == {week_start(TODAY)}  # the read step and the suggest step both ask
 
 
 def run(world, actor=None):
-    sync.sync_team(world["directory"].db, actor or world["asha"], uuid.UUID(world["team"]["id"]))
+    sync.suggest_team(world["directory"].db, actor or world["asha"], uuid.UUID(world["team"]["id"]))
 
 
 def stored(db):
@@ -203,13 +203,13 @@ def test_one_person_can_be_synced_alone_and_the_others_are_read_later(db, world)
     world["answers"] += [answer(model_item()), answer(model_item(title="Order bracket samples"))]
     team_id = uuid.UUID(world["team"]["id"])
 
-    sync.sync_team(db, world["asha"], team_id, world["ravi"].id)
+    sync.suggest_team(db, world["asha"], team_id, world["ravi"].id)
 
     assert len(world["prompts"]) == 1 and "Submitter: Whoever" in world["prompts"][0]
     assert [s.person_id for s in stored(db)] == [world["ravi"].id]
     assert [r.source_submission_id for r in db.scalars(select(StandupRead))] == [1]  # Asha's post is still unread
 
-    sync.sync_team(db, world["asha"], team_id, world["asha"].id)
+    sync.suggest_team(db, world["asha"], team_id, world["asha"].id)
 
     assert len(world["prompts"]) == 2
     assert {s.person_id for s in stored(db)} == {world["ravi"].id, world["asha"].id}
@@ -220,7 +220,7 @@ def test_syncing_someone_who_is_not_on_the_team_is_a_404_and_reads_nothing(db, w
     world["subs"].append(submission(slack=world["ravi"].slack_user_id))
 
     with pytest.raises(AppError) as err:
-        sync.sync_team(db, world["asha"], uuid.UUID(world["team"]["id"]), outsider.id)
+        sync.suggest_team(db, world["asha"], uuid.UUID(world["team"]["id"]), outsider.id)
 
     assert (err.value.code, err.value.status_code) == ("person_not_on_team", 404)
     assert world["prompts"] == [] and world["channels"] == []

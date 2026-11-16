@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ArrowsClockwise, ListChecks } from '@phosphor-icons/react';
+import { ArrowsClockwise, ListChecks, Sparkle } from '@phosphor-icons/react';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
 import { Button } from '../../app/components/ui/button';
@@ -16,7 +16,7 @@ import { EditSuggestionDialog } from './EditSuggestionDialog';
 import { MemberList } from './MemberList';
 import { StandupBlocks } from './StandupBlocks';
 import { SuggestionCard } from './SuggestionCard';
-import { useRejectSuggestion, useRestoreSuggestion, useSuggestions, useSyncSuggestions } from './hooks';
+import { useRejectSuggestion, useRestoreSuggestion, useSuggestions, useSuggestTasks, useSyncSuggestions } from './hooks';
 
 /** "NPI (Asha Rao)": the team, then the manager who runs it. */
 const teamOption = (t: TeamRecord) => `${t.name} (${t.manager?.displayName ?? 'No manager'})`;
@@ -61,7 +61,8 @@ interface PageProps {
 function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
   const page = useSuggestions(teamId);
   const sync = useSyncSuggestions(teamId);
-  // A ref, not `sync.isPending`: a second click in the same frame still sees the old state, and each sync counts against 3 a minute.
+  const suggest = useSuggestTasks(teamId);
+  // A ref, not `isPending`: a second click in the same frame still sees the old state, and each Suggest counts against 3 a minute.
   const syncing = useRef(false);
   const reject = useRejectSuggestion();
   const restore = useRestoreSuggestion();
@@ -93,11 +94,16 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
   const toggle = (id: string) => setTicked((t) => { const next = new Set(t); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const untick = (id: string) => setTicked((t) => { const next = new Set(t); next.delete(id); return next; });
   const fail = (err: unknown) => toast(errorMessage(err), 'warning');
-  /** One sync at a time, for everyone or for one person: a second press while one runs does nothing. */
-  const runSync = (personId: string | undefined, done: string) => {
+  /** One Sync or Suggest at a time: a second press while one runs does nothing. */
+  const runSync = () => {
     if (syncing.current) return;
     syncing.current = true;
-    sync.mutate(personId, { onSuccess: () => toast(done, 'success'), onError: fail, onSettled: () => { syncing.current = false; } });
+    sync.mutate(undefined, { onSuccess: () => toast('Synced from the standup.', 'success'), onError: fail, onSettled: () => { syncing.current = false; } });
+  };
+  const runSuggest = (personId: string | undefined, done: string) => {
+    if (syncing.current) return;
+    syncing.current = true;
+    suggest.mutate(personId, { onSuccess: () => toast(done, 'success'), onError: fail, onSettled: () => { syncing.current = false; } });
   };
 
   return (
@@ -121,10 +127,17 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
           )}
           <Button
             variant="outline"
-            disabled={sync.isPending || !standupChannelId}
-            onClick={() => runSync(undefined, 'Synced from the standup.')}
+            disabled={sync.isPending || suggest.isPending || !standupChannelId}
+            onClick={runSync}
           >
-            <ArrowsClockwise size={14} aria-hidden />{sync.isPending ? 'Syncing…' : 'Sync now'}
+            <ArrowsClockwise size={14} aria-hidden />{sync.isPending ? 'Syncing…' : 'Sync'}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={sync.isPending || suggest.isPending || !standupChannelId}
+            onClick={() => runSuggest(undefined, 'Suggested tasks for the team.')}
+          >
+            <Sparkle size={14} aria-hidden />{suggest.isPending && suggest.variables === undefined ? 'Suggesting…' : 'Suggest'}
           </Button>
           {canAct && <Button disabled={live.size === 0} onClick={() => setReviewing(true)}>Add ({live.size})</Button>}
         </div>
@@ -157,10 +170,10 @@ function SuggestionsPage({ me, teamId, canAct, teams, onTeam }: PageProps) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={sync.isPending || !standupChannelId}
-                onClick={() => runSync(current.person.id, `Synced ${current.person.displayName}.`)}
+                disabled={sync.isPending || suggest.isPending || !standupChannelId}
+                onClick={() => runSuggest(current.person.id, `Suggested tasks for ${current.person.displayName}.`)}
               >
-                <ArrowsClockwise size={14} aria-hidden />{sync.isPending && sync.variables === current.person.id ? 'Syncing…' : `Sync ${current.person.displayName}`}
+                <Sparkle size={14} aria-hidden />{suggest.isPending && suggest.variables === current.person.id ? 'Suggesting…' : `Suggest for ${current.person.displayName}`}
               </Button>
             </div>
             <StandupBlocks post={current.standup} unavailable={standupProblem === 'not_configured' || standupProblem === 'unreadable'} />

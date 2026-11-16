@@ -46,7 +46,10 @@ def call(world, who, method, path, **kw):
 
 
 def synced(world):
-    res = call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/sync")
+    """Sync the team, then ask the model for suggestions; returns the page the suggest step gives back."""
+    team_id = world["team"]["id"]
+    assert call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync").status_code == 200
+    res = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest")
     assert res.status_code == 200, res.text
     return res.json()
 
@@ -212,18 +215,25 @@ def test_a_start_date_cannot_be_after_the_due_date(world):
     assert (res.status_code, res.json()["detail"]["code"]) == (422, "start_after_due")
 
 
-def test_sync_can_be_limited_to_one_person(world):
+def test_suggest_can_be_limited_to_one_person(world):
     team_id = world["team"]["id"]
 
-    asha_only = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id={world['asha'].id}")
+    asha_only = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest?person_id={world['asha'].id}")
     assert asha_only.status_code == 200 and ravi_entry(asha_only.json())["suggestions"] == []  # Ravi's post was not read
 
-    ravi_only = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id={world['ravi'].id}")
+    ravi_only = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest?person_id={world['ravi'].id}")
     assert len(ravi_entry(ravi_only.json())["suggestions"]) == 1
 
-    stranger = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id={uuid.uuid4()}")
+    stranger = call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest?person_id={uuid.uuid4()}")
     assert (stranger.status_code, stranger.json()["detail"]["code"]) == (404, "person_not_on_team")
-    assert call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id=nope").status_code == 422
+    assert call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest?person_id=nope").status_code == 422
+
+
+def test_sync_alone_reads_the_channel_and_proposes_nothing(world):
+    page = call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/sync").json()
+
+    assert page["last_synced_at"] is not None
+    assert ravi_entry(page)["standup"] is not None and ravi_entry(page)["suggestions"] == []  # no model call
 
 
 def test_a_second_sync_adds_nothing_new(world):
@@ -250,7 +260,7 @@ def test_a_person_can_sync_three_times_a_minute_and_the_fourth_is_a_429_that_cos
 
     assert rate_limit.SYNC_PER_MINUTE == 3  # the model costs money: three a minute, whole team or one person at a time
     team_id = world["team"]["id"]
-    sync_path = f"/teams/{team_id}/suggestions/sync"
+    sync_path = f"/teams/{team_id}/suggestions/suggest"
 
     codes = [call(world, world["asha"], "POST", sync_path).status_code for _ in range(4)]
 
@@ -259,10 +269,10 @@ def test_a_person_can_sync_three_times_a_minute_and_the_fourth_is_a_429_that_cos
     assert call(world, world["admin"], "POST", sync_path).status_code == 200  # an admin has a budget of their own
 
 
-def test_syncing_one_person_at_a_time_uses_the_same_budget(world):
+def test_suggesting_one_person_at_a_time_uses_the_same_budget(world):
     team_id = world["team"]["id"]
 
-    codes = [call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/sync?person_id={p}").status_code
+    codes = [call(world, world["asha"], "POST", f"/teams/{team_id}/suggestions/suggest?person_id={p}").status_code
              for p in (world["asha"].id, world["ravi"].id, world["asha"].id, world["ravi"].id)]
 
     assert codes == [200, 200, 200, 429]
@@ -277,13 +287,14 @@ def test_the_scheduled_sync_is_not_counted_against_anyones_budget(world, db):
 
     sync.sync_team_scheduled(db, uuid.UUID(world["team"]["id"]))  # the server's own run has no person and no limit
 
-    assert call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/sync").status_code == 429
+    assert call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/suggest").status_code == 429
 
 
-def test_an_admin_sync_stores_suggestions_for_the_manager_but_creates_no_task(world, db):
+def test_an_admin_suggest_stores_suggestions_for_the_manager_but_creates_no_task(world, db):
     team_id = world["team"]["id"]
 
-    res = call(world, world["admin"], "POST", f"/teams/{team_id}/suggestions/sync")
+    assert call(world, world["admin"], "POST", f"/teams/{team_id}/suggestions/sync").status_code == 200
+    res = call(world, world["admin"], "POST", f"/teams/{team_id}/suggestions/suggest")
 
     assert res.status_code == 200
     assert ravi_entry(res.json())["suggestions"][0]["state"] == "pending"  # waiting for the manager
@@ -299,6 +310,7 @@ def test_who_may_call_what(world, directory):
     calls = [
         ("GET", f"/teams/{team_id}/suggestions", None),
         ("POST", f"/teams/{team_id}/suggestions/sync", None),
+        ("POST", f"/teams/{team_id}/suggestions/suggest", None),
         ("POST", f"/teams/{team_id}/suggestions/add", {"suggestion_ids": [sid]}),
         ("PATCH", f"/suggestions/{sid}", {"priority": "low"}),
         ("POST", f"/suggestions/{sid}/reject", None),
@@ -310,7 +322,7 @@ def test_who_may_call_what(world, directory):
         kw = {"json": body} if body is not None else {}
         assert call(world, None, method, path, **kw).status_code == 401, path
         for name, who in (("ravi", world["ravi"]), ("zoe", zoe), ("admin", world["admin"])):
-            admin_syncs = name == "admin" and path.endswith("/sync")  # ... and may sync it, but changes nothing else
+            admin_syncs = name == "admin" and path.endswith(("/sync", "/suggest"))  # ... and may sync and suggest on it, but changes nothing else
             expected = 200 if method in reads_ok.get(name, set()) or admin_syncs else 403
             assert call(world, who, method, path, **kw).status_code == expected, (name, path)
 
@@ -318,6 +330,7 @@ def test_who_may_call_what(world, directory):
 def test_a_team_without_a_channel_cannot_sync(world, db):
     call(world, world["admin"], "PATCH", f"/teams/{world['team']['id']}/standup-channel", json={"standup_channel_id": None, "reason": "none"})
 
-    res = call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/sync")
+    for step in ("sync", "suggest"):
+        res = call(world, world["asha"], "POST", f"/teams/{world['team']['id']}/suggestions/{step}")
 
-    assert res.status_code == 409 and res.json()["detail"]["code"] == "standup_channel_not_set"
+        assert res.status_code == 409 and res.json()["detail"]["code"] == "standup_channel_not_set", step

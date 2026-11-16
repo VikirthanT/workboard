@@ -340,7 +340,7 @@ def test_last_synced_is_none_until_the_whole_team_is_read_and_is_set_even_when_n
     monkeypatch.setattr(sync.reader, "list_submissions", lambda channel, since: [])  # nobody posted
     assert queries.last_synced(db, world["team_id"]) is None
 
-    sync.sync_team(db, world["asha"], world["team_id"], world["ravi"].id)  # one person only: says nothing about the team
+    sync.suggest_team(db, world["asha"], world["team_id"], world["ravi"].id)  # one person only: says nothing about the team
     assert queries.last_synced(db, world["team_id"]) is None
 
     sync.sync_team_scheduled(db, world["team_id"])  # the whole team, and nothing was found

@@ -21,12 +21,18 @@ export async function getSuggestions(teamId: string): Promise<SuggestionsPage> {
   return mapSuggestionsPage(data);
 }
 
+/** Read the team's standup channel (no language model, so it is quick) and record the "Last sync". Returns the page. */
+export async function syncSuggestions(p: { teamId: string }): Promise<SuggestionsPage> {
+  const { data } = await apiClient.post<WireSuggestionsPage>(`/teams/${p.teamId}/suggestions/sync`);
+  return mapSuggestionsPage(data);
+}
+
 /**
- * Read the team's standup channel and propose tasks. Runs the language model, so it can take a while. With `personId`
- * only that person's posts are read, so a manager can go one person at a time. Returns the page.
+ * Propose tasks from the standup posts. Runs the language model, so it can take a while. With `personId` only that
+ * person's posts are read, so a manager can go one person at a time. Returns the page.
  */
-export async function syncSuggestions(p: { teamId: string; personId?: string }): Promise<SuggestionsPage> {
-  const url = `/teams/${p.teamId}/suggestions/sync`;
+export async function suggestTasks(p: { teamId: string; personId?: string }): Promise<SuggestionsPage> {
+  const url = `/teams/${p.teamId}/suggestions/suggest`;
   const { data } = p.personId
     ? await apiClient.post<WireSuggestionsPage>(url, undefined, { params: { person_id: p.personId } })
     : await apiClient.post<WireSuggestionsPage>(url);

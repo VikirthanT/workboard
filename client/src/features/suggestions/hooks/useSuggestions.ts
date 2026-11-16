@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BOARD_KEY, getSuggestionsKey, ME_KEY, REPORT_KEY, STANDUP_CHANNELS_KEY, SUGGESTIONS_KEY, TASK_KEY } from '../../../app/constants/queryKeys';
 import type { SuggestionPatch, SuggestionsPage } from '../../../app/types/types';
-import { addSuggestions, editSuggestion, getSuggestions, rejectSuggestion, restoreSuggestion, syncSuggestions } from '../../../services/api';
+import { addSuggestions, editSuggestion, getSuggestions, rejectSuggestion, restoreSuggestion, suggestTasks, syncSuggestions } from '../../../services/api';
 import { pendingCount } from '../pendingCount';
 
 /**
@@ -33,19 +33,25 @@ export function usePendingSuggestionCount(teamId: string | undefined, enabled = 
   });
 }
 
-/**
- * A sync returns the fresh page, so it replaces the cached one instead of triggering another read. Call it with a
- * person's id to sync only them (one at a time), or with nothing to sync everyone.
- */
+/** A sync returns the fresh page, so it replaces the cached one instead of triggering another read. It reads the whole team. */
 export function useSyncSuggestions(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (personId?: string) => syncSuggestions({ teamId, personId }),
+    mutationFn: () => syncSuggestions({ teamId }),
     onSuccess: (page: SuggestionsPage) => {
       qc.setQueryData(getSuggestionsKey(teamId), page);
       // The standup app may have gained channels since the list was last read: the pickers read it again.
       void qc.invalidateQueries({ queryKey: STANDUP_CHANNELS_KEY });
     },
+  });
+}
+
+/** Ask the model for tasks from one person's posts (or, with nothing, everyone's). The reply is the fresh page. */
+export function useSuggestTasks(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (personId?: string) => suggestTasks({ teamId, personId }),
+    onSuccess: (page: SuggestionsPage) => qc.setQueryData(getSuggestionsKey(teamId), page),
   });
 }
 

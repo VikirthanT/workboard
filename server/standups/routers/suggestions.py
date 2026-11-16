@@ -79,16 +79,33 @@ def list_suggestions(
 
 
 @router.post("/teams/{team_id}/suggestions/sync", response_model=schemas.SuggestionsPageResponse)
-def sync_suggestions(
+def sync_standups(
+    team_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
+    """Read the team's standup channel (this week's standups only: those dated on or after this week's Monday), record
+    the look as "Last sync" and return the page with each person's latest standup. No model call, so it is quick.
+
+    Who: the team's own manager, or any admin (403 `forbidden`). Errors: 409 `standup_channel_not_set`;
+    501 `standups_not_configured`.
+    """
+    rate_limit.check(("sync-read", actor.id), rate_limit.SLACK_READ_PER_MINUTE, 60)
+    sync.sync_team(db, actor, team_id)
+    return _page(db, actor, team_id)
+
+
+@router.post("/teams/{team_id}/suggestions/suggest", response_model=schemas.SuggestionsPageResponse)
+def suggest_tasks(
     team_id: uuid.UUID,
     person_id: uuid.UUID | None = Query(default=None),
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
-    """Read the team's standup channel (this week's standups only: those dated on or after this week's Monday), propose tasks from the team's people's posts, and return the
+    """Propose tasks from the team's people's posts (this week's standups only) and return the
     page. Posts already read and unchanged are skipped. Runs the language model, so it can take a while.
 
-    `person_id` (optional) syncs only that person, so a manager can go one person at a time.
+    `person_id` (optional) suggests for only that person, so a manager can go one person at a time.
 
     shortcut: runs inside the request, and two syncs at once can race on the same post, when one fails on the unique
     rule and the other's work stands; move to a background job if syncs get slow or are triggered automatically.
@@ -99,7 +116,7 @@ def sync_suggestions(
     earlier ones are).
     """
     rate_limit.check(("sync", actor.id), rate_limit.SYNC_PER_MINUTE, 60)  # it runs the language model: three a minute
-    sync.sync_team(db, actor, team_id, person_id)
+    sync.suggest_team(db, actor, team_id, person_id)
     return _page(db, actor, team_id)
 
 
