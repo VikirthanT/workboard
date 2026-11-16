@@ -142,6 +142,8 @@ export interface TaskReason {
 
 export interface Task {
   id: string;
+  /** The short id people can say aloud, shown as #<number> ("task #12") when a task is opened, and in Slack. One counter for every task. */
+  number: number;
   title: string;
   description: string;
   status: Status;
@@ -206,6 +208,8 @@ export interface BoardQuery {
   attention: boolean;
   personId: string | null;
   filters: BoardFilter[];
+  /** Part of a title, or a task number (33 or #33); empty shows every task. Searched on the server. */
+  search: string;
 }
 
 /** Cards a column shows at first, and how many more each "Load more" fetches. */
@@ -319,6 +323,113 @@ export interface TeamRecord {
   name: string;
   manager: PersonSummary | null;
   memberCount: number;
+  /** The standup channel the team's suggestions are read from; null until an admin sets one. */
+  standupChannelId: string | null;
+}
+
+export type SuggestionState = 'pending' | 'approved' | 'rejected';
+export type SuggestionKind = 'blocker' | 'deadline' | 'handover' | 'carry_over' | 'new';
+
+/** A task proposed from someone's standup. Not on any board until the manager adds it. */
+export interface Suggestion {
+  id: string;
+  personId: string;
+  title: string;
+  description: string;
+  kind: SuggestionKind;
+  priority: Priority;
+  startAt: string | null;
+  dueAt: string | null;
+  /** True when the standup stated no date and `dueAt` is the Friday default; editing the date makes it the manager's own. */
+  dueIsDefault: boolean;
+  subtasks: string[];
+  /** The exact line of the standup this came from. */
+  evidenceQuote: string;
+  /** The title of a tracked task this is a new obstacle to, or null. */
+  relatedTo: string | null;
+  state: SuggestionState;
+  lateReply: boolean;
+  standupDate: string;
+  /** The task it became, once added. */
+  taskId: string | null;
+}
+
+/** What a person posted: three sections when they used them, otherwise `message` holds the whole post. */
+export interface StandupPost {
+  date: string;
+  /** When they actually posted (an ISO time); the page shows this day, not the standup's date. Null if the standup app gave none. */
+  postedAt: string | null;
+  lateReply: boolean;
+  lastWeek: string | null;
+  thisWeek: string | null;
+  blockers: string | null;
+  message: string | null;
+}
+
+export interface PersonSuggestions {
+  person: { id: string; displayName: string; email: string; role: TeamRole };
+  /** Null when they posted nothing this week (the standups of earlier weeks are not read). */
+  standup: StandupPost | null;
+  suggestions: Suggestion[];
+}
+
+export interface SuggestionsPage {
+  standupChannelId: string | null;
+  lastSyncedAt: string | null;
+  /** Why the standup posts could not be shown (the suggestions still are); null when they were read. */
+  standupProblem: 'not_configured' | 'unreadable' | 'channel_empty' | null;
+  people: PersonSuggestions[];
+}
+
+/** The fields a manager can change on a pending suggestion; a date may be null to clear it. */
+export interface SuggestionPatch {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  personId?: string;
+  startAt?: string | null;
+  dueAt?: string | null;
+}
+
+/** What one run of the people sync from Slack did, for the admin who pressed the button. */
+export interface DirectorySyncResult {
+  /** In the Slack workspace and listable. */
+  people: number;
+  added: number;
+  reactivated: number;
+  deactivated: number;
+  deactivatedOnATeam: number;
+  newAdmins: number;
+  skipped: number;
+}
+
+/** A channel in the standup app: `id` is what a team stores. The list is read live from the standup database. */
+export interface StandupChannel {
+  id: string;
+  name: string;
+}
+
+/** A channel looked up by its id (the standup app's list first, then Slack): the name to show beside it. */
+export interface ChannelName {
+  id: string;
+  name: string;
+}
+
+/** What adding a person from the team's Slack channel would do: `available` can be added, the rest cannot and say why. */
+export type ChannelMemberState = 'available' | 'on_this_team' | 'on_other_team' | 'unavailable';
+
+export interface ChannelMember {
+  person: PersonRecord;
+  state: ChannelMemberState;
+  /** For `on_other_team`: which team. */
+  teamName: string | null;
+}
+
+/** Who is in a team's Slack channel and in the directory; `notInDirectory` counts the Slack members the directory does not know. */
+export interface ChannelMembers {
+  channelId: string;
+  members: ChannelMember[];
+  notInDirectory: number;
 }
 
 export type TeamRole = 'member' | 'manager';

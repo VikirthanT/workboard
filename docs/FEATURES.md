@@ -46,7 +46,7 @@ React + Vite + TypeScript, TanStack Query, React Router, dnd-kit, Tailwind v4 on
 |---|---|
 | Local dev stack with a demo world | `make dev`, `docker-compose.dev.yml`, `seed/demo_db.py` |
 | Production stack (database and API, no dev sign-in) | `docker-compose.yml`, `Dockerfile.api`, `make prod-up` |
-| Directory loader with safety limits | `seed/load_db.py` (never deactivates an admin; refuses large removals without a flag) |
+| People directory synced from Slack, with safety limits | `server/identity/services/directory_sync.py`, `identity/directory_scheduler.py` (weekly, and on an admin's press; never deactivates an admin; refuses large removals without a flag; every run audited) |
 | Deployment notes | `docs/DEPLOYMENT.md` |
 | Decision records | `docs/DATABASE_DECISION.md`, `docs/WORKLOG.md` |
 

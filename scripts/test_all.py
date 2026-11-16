@@ -134,7 +134,12 @@ def e2e(tmp: Path) -> Result:
         return result
     env = {**env, "DATABASE_URL": db.stdout.strip(), "DEV_AUTH": "true", "WB_E2E_JSON": str(tmp / "e2e.json")}
     try:
-        for step in ([str(venv / "alembic"), "upgrade", "head"], [str(venv / "python"), str(ROOT / "seed" / "demo_db.py")]):
+        steps = (
+            [str(venv / "alembic"), "upgrade", "head"],
+            [str(venv / "python"), str(ROOT / "seed" / "demo_db.py")],
+            [str(venv / "python"), str(ROOT / "scripts" / "e2e_seed.py")],  # a few suggestions, which a sync would otherwise make
+        )
+        for step in steps:
             setup = subprocess.run(step, env=env, cwd=ROOT / "server" if step[0].endswith("alembic") else ROOT, capture_output=True, text=True)
             if setup.returncode != 0:
                 result.errors = 1

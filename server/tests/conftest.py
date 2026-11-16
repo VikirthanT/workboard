@@ -33,6 +33,9 @@ time.tzset()
 for _name in (
     "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "SECRET_KEY", "TOKEN_TTL_SECONDS",
     "ALLOWED_EMAIL_DOMAIN", "BOOTSTRAP_ADMIN_EMAILS",
+    "STANDUP_DB_URL", "LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL",
+    # Never let a test see the real Slack tokens: it could post to a real channel.
+    "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
 ):
     os.environ.pop(_name, None)
 
@@ -67,6 +70,21 @@ def _database():
 @pytest.fixture(autouse=True)
 def _clean_rate_limits():
     rate_limit.reset()  # a test must not inherit another test's request counts
+
+
+@pytest.fixture(autouse=True)
+def _no_real_slack(monkeypatch):
+    """No test may reach Slack, whatever token it sets: the one function that touches the network refuses. A test that
+    wants Slack's behaviour fakes the client function it uses, or replaces `_post` itself. Also forgets each person's Home
+    tab filters, which the listener keeps in memory."""
+    from slack import client as slack_client
+    from slack.services import home
+
+    def refuse(*args, **kwargs):
+        raise slack_client.SlackError("Slack is not reachable from the tests.")
+
+    monkeypatch.setattr(slack_client, "_post", refuse)
+    home._filters.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -128,7 +146,7 @@ def admin(directory):
 def make_team(directory, admin, name: str, manager: Person) -> dict:
     res = directory.call(
         admin, "POST", "/teams",
-        json={"name": name, "initial_manager_person_id": str(manager.id), "reason": "set up"},
+        json={"name": name, "initial_manager_person_id": str(manager.id), "reason": "set up", "standup_channel_id": "C0TEST"},
     )
     assert res.status_code == 201, res.text
     return res.json()

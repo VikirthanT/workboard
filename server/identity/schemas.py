@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from identity.states import MAX_REASON_LENGTH
+from identity.states import MAX_CHANNEL_ID_LENGTH, MAX_REASON_LENGTH
 
 Item = TypeVar("Item")
 
@@ -34,6 +34,42 @@ class PersonResponse(BaseModel):
     open_task_count: int | None = None
 
 
+class DirectorySyncResponse(BaseModel):
+    """What one run of the people sync did, for the admin who pressed the button."""
+
+    people: int  # in the Slack workspace and listable
+    added: int
+    reactivated: int
+    deactivated: int
+    deactivated_on_a_team: int
+    new_admins: int
+    skipped: int
+
+
+class MembersAdd(BaseModel):
+    """Several people onto one team in one go (the Slack channel review). All or none are added."""
+
+    person_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)
+
+
+class ChannelMemberResponse(BaseModel):
+    """One person from the team's Slack channel who is in the directory. `state` says what adding them would do:
+    `available` (on no team), `on_this_team`, `on_other_team` (`team_name` says which) or `unavailable` (inactive, or a
+    manager, who cannot be added as a member)."""
+
+    person: PersonResponse
+    state: str
+    team_name: str | None = None
+
+
+class ChannelMembersResponse(BaseModel):
+    channel_id: str
+    members: list[ChannelMemberResponse]
+    # Slack members the directory does not know (bots, guests, people not loaded): they cannot be added from here.
+    not_in_directory: int
+
+
 class DevAccount(BaseModel):
     """One line of the dev sign-in list. `can_sign_in` is false for people the server will refuse."""
 
@@ -48,12 +84,20 @@ class TeamResponse(BaseModel):
     active: bool
     manager: PersonResponse | None
     member_count: int
+    standup_channel_id: str | None = None
 
 
 class TeamCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     initial_manager_person_id: uuid.UUID
     reason: str = Field(max_length=MAX_REASON_LENGTH)
+    standup_channel_id: str = Field(max_length=MAX_CHANNEL_ID_LENGTH)
+
+
+class StandupChannelChange(BaseModel):
+    """null (or blank) clears the channel: the team then gets no suggestions."""
+    standup_channel_id: str | None = Field(max_length=MAX_CHANNEL_ID_LENGTH)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)  # an admin must give one; the service checks
 
 
 class TeamDelete(BaseModel):

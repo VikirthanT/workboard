@@ -17,7 +17,7 @@ const ann = { id: 'a', displayName: 'Ann Member', email: 'ann@example.test', act
 const actions = { canEdit: false, canDelete: false, canChangeAssignee: false, canComment: true, transitions: [] as unknown[] };
 const task = (over: Omit<Partial<Task>, 'actions'> & { actions?: Partial<typeof actions> } = {}) =>
   ({
-    id: 'k1', title: 'Order parts', description: '', status: 'in_progress', priority: 'high', dueAt: null,
+    id: 'k1', number: 12, title: 'Order parts', description: '', status: 'in_progress', priority: 'high', dueAt: null,
     creator: ann, assignee: ann, returnedCount: 0, overdue: false, dueSoon: false, needsReassignment: false, returned: false, latestReason: null,
     ...over, actions: { ...actions, ...over.actions },
   }) as unknown as Task;
@@ -40,6 +40,11 @@ describe('TaskDetailSheet', () => {
     h.detail = { data: undefined, isError: false };
     render(<TaskDetailSheet taskId="k1" me={{} as Me} onClose={vi.fn()} onEdit={vi.fn()} onTransition={vi.fn()} />);
     expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+
+  it('shows the short task id when the task is opened, the same one the Slack card carries', () => {
+    show(task());
+    expect(screen.getByText('Task #12')).toBeInTheDocument();
   });
 
   it('shows the support person just below the assignee, and no Support row when there is none', () => {

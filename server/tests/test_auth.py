@@ -31,7 +31,7 @@ def test_manager_cannot_create_teams_or_read_the_audit_log(directory, admin):
     asha, ravi = directory.person("Asha"), directory.person("Ravi")
     make_team(directory, admin, "NPI", asha)
     create = directory.call(
-        asha, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(ravi.id), "reason": "x"}
+        asha, "POST", "/teams", json={"name": "QA", "initial_manager_person_id": str(ravi.id), "reason": "x", "standup_channel_id": "C0QA"}
     )
     assert create.status_code == 403
     assert directory.call(asha, "GET", "/audit-log").status_code == 403

@@ -92,7 +92,7 @@ export function KanbanBoard({ tasks, onOpen, onTransition, onBlockedDrop, readOn
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // The server sends each column already sorted (open: most urgent first; Done: newest closed first).
+  // The server sends the cards already sorted, most recently changed first; grouping by status keeps that order in every column.
   const byStatus = useMemo(() => {
     const m = new Map<Status, Task[]>(STATUSES.map((s) => [s, []]));
     tasks.forEach((t) => m.get(t.status)!.push(t));

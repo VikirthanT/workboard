@@ -1,11 +1,24 @@
-import type { AuditEntry, Page, PersonRecord } from '../app/types/types';
-import type { WireAudit, WireIdentity, WirePage } from './backendTypes';
+import type { AuditEntry, DirectorySyncResult, Page, PersonRecord } from '../app/types/types';
+import type { WireAudit, WireDirectorySync, WireIdentity, WirePage } from './backendTypes';
 import { apiClient } from './axiosInstance';
 import { mapAudit, mapPage, mapPerson } from './mappers';
 
 /** Make or revoke admin. The server refuses a no-op and the last active admin. */
 export async function setAdmin(p: { personId: string; isAdmin: boolean; reason: string }): Promise<void> {
   await apiClient.patch(`/people/${p.personId}/admin`, { is_admin: p.isAdmin, reason: p.reason });
+}
+
+/**
+ * Refresh the people directory from the Slack workspace now (admins only): the run the server makes every week. People in
+ * Slack are added or refreshed, people who left are made inactive (never deleted), and the run is audited under the
+ * admin's name. The server refuses a run that would deactivate a large share of people (it says how to force it).
+ */
+export async function syncPeople(): Promise<DirectorySyncResult> {
+  const { data } = await apiClient.post<WireDirectorySync>('/people/sync');
+  return {
+    people: data.people, added: data.added, reactivated: data.reactivated, deactivated: data.deactivated,
+    deactivatedOnATeam: data.deactivated_on_a_team, newAdmins: data.new_admins, skipped: data.skipped,
+  };
 }
 
 /** Everyone with admin access, on a team or not (an admin may be only an admin). Up to 200, far more than there will be. */

@@ -22,6 +22,11 @@ test('admin creates a team and finds the change in the audit log', async ({ page
   await dialog.getByLabel('Team name').fill('E2E Team');
   await dialog.getByRole('combobox', { name: /Manager/ }).click();
   await page.getByRole('option', { name: /admin@atimotors\.com/ }).click(); // the only person on no team
+  // A team needs a standup channel. The throwaway server has no standup channels to pick from, so the id is typed; when the
+  // picker is shown instead of the box (a standup database is set up), switch to the box first.
+  const typeIt = dialog.getByRole('button', { name: 'Use a channel that is not in this list' });
+  if (await typeIt.count()) await typeIt.click();
+  await dialog.getByLabel(/Standup channel/).fill('C0E2ETEST');
   await dialog.getByLabel(/Reason/).fill('End-to-end smoke test');
   await dialog.getByRole('button', { name: 'Create team' }).click();
 

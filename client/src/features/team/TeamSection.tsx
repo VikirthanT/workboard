@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CaretDown, Plus, Trash } from '@phosphor-icons/react';
+import { CaretDown, Hash, PencilSimple, Plus, SlackLogo, Trash } from '@phosphor-icons/react';
 import { Avatar } from '../../app/components/ui/avatar';
 import { Button } from '../../app/components/ui/button';
 import { Checkbox } from '../../app/components/ui/checkbox';
@@ -22,8 +22,15 @@ interface Props extends MemberActions {
   /** How many people the team has before filtering, so a filtered-out section can say so. */
   totalMembers: number;
   onAdd: () => void;
+  /** Add people from the team's Slack channel after a review: an admin on any team, a manager on their own. The button is
+   *  disabled until the team has a standup channel. Left out when the caller may not (the server refuses it anyway). */
+  onPullFromSlack?: () => void;
   /** Admin only: delete the team. Left out for a manager. */
   onDeleteTeam?: () => void;
+  /** Change the team's standup channel: an admin on any team, a manager on their own. */
+  onEditChannel?: () => void;
+  /** The channel's name, when the caller has the channel list; otherwise the header falls back to the id. */
+  channelName?: string;
   /** Start folded (a filter with no match in this team). */
   defaultOpen?: boolean;
 }
@@ -32,7 +39,7 @@ interface Props extends MemberActions {
  * One team as a collapsible group: a header with the team, its manager and its actions, then one row per person.
  * Shared by the manager's own page (no role or admin controls) and the admin's Teams portal (all of them).
  */
-export function TeamSection({ team, members, totalMembers, onAdd, onDeleteTeam, defaultOpen = true, ...actions }: Props) {
+export function TeamSection({ team, members, totalMembers, onAdd, onPullFromSlack, onDeleteTeam, onEditChannel, channelName, defaultOpen = true, ...actions }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = `team-${team.id}`;
   const filtered = members.length !== totalMembers;
@@ -52,6 +59,30 @@ export function TeamSection({ team, members, totalMembers, onAdd, onDeleteTeam, 
           <span className="text-sm tabular-nums text-ink-subtle">{filtered ? `${members.length} of ${totalMembers}` : totalMembers}</span>
           <span className="hidden truncate text-sm text-ink-subtle sm:inline">{team.manager ? `Manager: ${team.manager.displayName}` : 'No manager yet'}</span>
         </button>
+        {onEditChannel && (
+          <button
+            type="button"
+            aria-label={`Standup channel of ${team.name}`}
+            title="Edit standup channel"
+            onClick={onEditChannel}
+            className="hidden cursor-pointer items-center gap-1.5 border-none bg-transparent p-1 text-sm text-ink-subtle transition-colors hover:text-ink focus-ring md:inline-flex"
+          >
+            <Hash size={14} aria-hidden />
+            {channelName ?? team.standupChannelId ?? 'No standup channel'}
+            <PencilSimple size={14} aria-hidden />
+          </button>
+        )}
+        {onPullFromSlack && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!team.standupChannelId}
+            title={team.standupChannelId ? 'Add people from the team’s Slack channel' : 'Set the team’s standup channel first'}
+            onClick={onPullFromSlack}
+          >
+            <SlackLogo size={14} aria-hidden />Pull from Slack
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onAdd}><Plus size={14} aria-hidden />Add person</Button>
         {onDeleteTeam && (
           <Button variant="ghost" size="icon" aria-label={`Delete team ${team.name}`} title="Delete team" onClick={onDeleteTeam}>

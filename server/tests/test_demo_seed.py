@@ -185,16 +185,17 @@ def test_remove_takes_the_demo_away_and_leaves_everything_else_including_the_aud
     assert db.scalar(select(func.count(AccessAuditLog.id))) == audit_rows  # append-only: the demo's entries stay
 
 
-def test_the_directory_load_never_deactivates_the_demo_accounts(demo):
-    import importlib.util as util
+def test_the_slack_directory_sync_never_deactivates_the_demo_accounts(demo):
+    from identity.services import directory_sync
 
-    spec = util.spec_from_file_location("load_db", Path(__file__).resolve().parents[2] / "seed" / "load_db.py")
-    load_db = util.module_from_spec(spec)
-    spec.loader.exec_module(load_db)
+    someone = {"id": "U0SOMEONE", "profile": {"email": "someone@atimotors.com", "display_name": "Someone"}}  # Slack has none of the demo people
+    demo_state = lambda: {p.slack_user_id: p.active for p in demo.scalars(select(Person)) if p.slack_user_id.startswith(states.DEMO_SLACK_PREFIX)}  # noqa: E731
+    before = demo_state()  # the demo has one person who has "left" on purpose
 
-    left = load_db.deactivate_missing(demo, {"SOMEONE-ELSE"})  # a file that contains none of the demo people
+    directory_sync.sync_directory(demo, [someone])
 
-    assert not [p for p in left if p.slack_user_id.startswith(states.DEMO_SLACK_PREFIX)]
+    demo.expire_all()
+    assert demo_state() == before  # nobody was deactivated, and nobody came back
     assert person(demo, "manager1@atimotors.com").active is True
 
 

@@ -1,11 +1,13 @@
 """Audit action names written to access_audit_log."""
 TEAM_CREATE = "team.create"
 TEAM_MANAGER_CHANGE = "team.manager_change"
+TEAM_STANDUP_CHANNEL_CHANGE = "team.standup_channel_change"
 TEAM_DELETE = "team.delete"
 MEMBER_ADD = "member.add"
 MEMBER_REMOVE = "member.remove"
 ADMIN_GRANT = "admin.grant"
 ADMIN_REVOKE = "admin.revoke"
+DIRECTORY_SYNC = "directory.sync"  # one run of the people sync from Slack; the counts are in the entry's details
 # Written by the tasks feature into the same append-only log. A deleted task takes its own timeline with it, so the
 # delete entry carries a snapshot of the task and that timeline in `details`.
 TASK_DELETE = "task.delete"
@@ -17,6 +19,7 @@ AUTH_LOGIN = "auth.login"
 AUTH_LOGIN_FAILED = "auth.login_failed"
 
 MAX_REASON_LENGTH = 500
+MAX_CHANNEL_ID_LENGTH = 32  # a Slack channel id is about 11 characters; this only stops absurd input
 
 # Slack ids of the development demo accounts (seed/demo_db.py) start with this. The directory load leaves them alone.
 DEMO_SLACK_PREFIX = "DEMO-"

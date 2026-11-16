@@ -181,6 +181,23 @@ the redirects are relative. Until all of them are set, "Sign in with real Google
 The frontend is ready: the login page reads `/login?code=` and `/login?error=`, trades the code, and the session's
 token is sent as `Authorization: Bearer` on every call.
 
+## Slack and the standup suggestions
+
+`make prod-up` also starts the Slack side and passes the settings from `.env` through. Nothing here is required: with the
+settings empty each part stays off and the rest of the stack runs as before.
+
+| What | Setting in `.env` | Where it runs |
+| --- | --- | --- |
+| The standup database (read only) | `STANDUP_DB_URL=sqlite:////opt/standup-bot/standup.db`, and `STANDUP_DB_DIR` if the folder is somewhere else on the host | The API container. The folder is mounted read only at `/opt/standup-bot`; the container's user (uid 10001) must be able to read it. |
+| The language model for suggestions | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` (`LLM_BASE_URL` only for an OpenAI-compatible host) | The API container |
+| Channel announcements and DM cards | `SLACK_BOT_TOKEN` | The API container |
+| DM buttons and the update form | `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` | The `slack` container (the API's image with `python -m slack.listener`). It connects out to Slack, so it needs no public address. Without both tokens it says so in its log and idles. |
+
+How to create the app and get the tokens: `docs/SLACK_SETUP.md`. Check the listener with `docker compose logs slack`.
+
+Not verified here: the standup folder mount against the real server. If the standup app keeps its database in WAL mode, a
+read-only mount may stop SQLite opening it; check `PRAGMA journal_mode` on the real file before the first deploy.
+
 ## Later: HTTPS (when there is a domain)
 Add the certificate step (certbot / Let's Encrypt, as in MDM): port 443, a redirect from 80, `SERVER_DOMAIN` in
 `.env`. HSTS and the content-security policy are already in the nginx config. Only the nginx config and compose file change.

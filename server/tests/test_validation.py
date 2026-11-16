@@ -18,14 +18,19 @@ def codes(response) -> str:
 @pytest.mark.parametrize("body", [
     {},
     {"name": "NPI"},
-    {"name": "NPI", "initial_manager_person_id": NOBODY},
-    {"name": "NPI", "reason": "r"},
-    {"name": "NPI", "initial_manager_person_id": "not-a-uuid", "reason": "r"},
-    {"name": "", "initial_manager_person_id": NOBODY, "reason": "r"},
-    {"name": "x" * 101, "initial_manager_person_id": NOBODY, "reason": "r"},
-    {"name": "NPI", "initial_manager_person_id": NOBODY, "reason": "r" * 501},
-    {"name": 7, "initial_manager_person_id": NOBODY, "reason": "r"},
-], ids=["empty", "no manager", "no reason", "no name", "bad uuid", "empty name", "long name", "long reason", "name not text"])
+    {"name": "NPI", "initial_manager_person_id": NOBODY, "standup_channel_id": "C0NPI"},
+    {"name": "NPI", "reason": "r", "standup_channel_id": "C0NPI"},
+    {"name": "NPI", "initial_manager_person_id": "not-a-uuid", "reason": "r", "standup_channel_id": "C0NPI"},
+    {"name": "", "initial_manager_person_id": NOBODY, "reason": "r", "standup_channel_id": "C0NPI"},
+    {"name": "x" * 101, "initial_manager_person_id": NOBODY, "reason": "r", "standup_channel_id": "C0NPI"},
+    {"name": "NPI", "initial_manager_person_id": NOBODY, "reason": "r" * 501, "standup_channel_id": "C0NPI"},
+    {"name": 7, "initial_manager_person_id": NOBODY, "reason": "r", "standup_channel_id": "C0NPI"},
+    {"name": "NPI", "initial_manager_person_id": NOBODY, "reason": "r"},
+    {"name": "NPI", "initial_manager_person_id": NOBODY, "reason": "r", "standup_channel_id": "C" * 33},
+], ids=[
+    "empty", "no manager", "no reason", "no name", "bad uuid", "empty name", "long name", "long reason", "name not text",
+    "no channel", "long channel",
+])
 def test_create_team_rejects_malformed_bodies(directory, admin, body):
     assert directory.call(admin, "POST", "/teams", json=body).status_code == 422
 
@@ -37,7 +42,7 @@ def test_create_team_without_any_body_is_422(directory, admin):
 def test_a_blank_name_made_of_spaces_is_refused_by_the_service(directory, admin):
     asha = directory.person("Asha")
     res = directory.call(
-        admin, "POST", "/teams", json={"name": "   ", "initial_manager_person_id": str(asha.id), "reason": "r"}
+        admin, "POST", "/teams", json={"name": "   ", "initial_manager_person_id": str(asha.id), "reason": "r", "standup_channel_id": "C0NPI"}
     )
     assert res.status_code == 422 and codes(res) == "name_required"
 
@@ -106,7 +111,7 @@ def test_unknown_team_is_404_everywhere(directory, admin):
 def test_unknown_person_is_404_everywhere(directory, admin):
     team = make_team(directory, admin, "NPI", directory.person("Asha"))
     attempts = [
-        ("POST", "/teams", {"name": "QA", "initial_manager_person_id": NOBODY, "reason": "r"}),
+        ("POST", "/teams", {"name": "QA", "initial_manager_person_id": NOBODY, "reason": "r", "standup_channel_id": "C0QA"}),
         ("POST", f"/teams/{team['id']}/members", {"person_id": NOBODY, "reason": "r"}),
         ("DELETE", f"/teams/{team['id']}/members/{NOBODY}", {"reason": "r"}),
         ("PATCH", f"/teams/{team['id']}/manager", {"person_id": NOBODY, "reason": "r"}),

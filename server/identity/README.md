@@ -2,7 +2,7 @@
 
 Who exists, who is on which team, who runs it, and who can sign in. Everything is under `/api`.
 
-Rules in one paragraph: the directory (people) comes from Slack. A person has a team role (`member` or `manager`) and, separately, an `is_admin` flag. Only active managers and admins can sign in. An admin creates teams (each starts with one person, who becomes its manager), changes managers, deletes teams, and can add or remove people on any team. A manager adds and removes people on their own team. An admin who is also a member or manager keeps both. Every team or membership change is written to an append-only audit log (a database trigger refuses `UPDATE` and `DELETE` on it); admin changes require a reason. The tasks feature writes to the same log: `task.delete` (a snapshot of the deleted task and its timeline, since the timeline goes with the task) and `task.reassign`. The auth feature writes `auth.login` on each Google sign-in (`auth/services/login_audit.py`): the signed-in person is the actor, nothing else is stored. A refused sign-in is written as `auth.login_failed` (reason = the error code `domain_not_allowed` or `not_onboarded`, `details.email`, and the person as actor when the directory knows the email), but only when Google has verified who it is: a cancelled sign-in, a forged `state` or a bad Google answer have no one to name, and anyone could send those without an account. The same email and reason is written once per 10 minutes (`auth/states.py`, `REFUSED_LOGIN_QUIET_SECONDS`).
+Rules in one paragraph: the directory (people) comes from the Slack workspace: a sync reads `users.list` (200 a page, following Slack's cursor) once on start, every week at `DIRECTORY_SYNC_SCHEDULE`, and when an admin presses "Sync people from Slack"; each run is audited as `directory.sync`, and the people in `BOOTSTRAP_ADMIN_EMAILS` are made admin by it, which is how the first admin gets in. A person has a team role (`member` or `manager`) and, separately, an `is_admin` flag. Only active managers and admins can sign in. An admin creates teams (each starts with one person, who becomes its manager), changes managers, deletes teams, and can add or remove people on any team. A manager adds and removes people on their own team. An admin who is also a member or manager keeps both. Every team or membership change is written to an append-only audit log (a database trigger refuses `UPDATE` and `DELETE` on it); admin changes require a reason. The tasks feature writes to the same log: `task.delete` (a snapshot of the deleted task and its timeline, since the timeline goes with the task) and `task.reassign`. The auth feature writes `auth.login` on each Google sign-in (`auth/services/login_audit.py`): the signed-in person is the actor, nothing else is stored. A refused sign-in is written as `auth.login_failed` (reason = the error code `domain_not_allowed` or `not_onboarded`, `details.email`, and the person as actor when the directory knows the email), but only when Google has verified who it is: a cancelled sign-in, a forged `state` or a bad Google answer have no one to name, and anyone could send those without an account. The same email and reason is written once per 10 minutes (`auth/states.py`, `REFUSED_LOGIN_QUIET_SECONDS`).
 
 ## Endpoints
 
@@ -12,13 +12,17 @@ Rules in one paragraph: the directory (people) comes from Slack. A person has a 
 | `GET /api/me` | signed in | `routers/people.py` | The signed-in person, with team name. |
 | `GET /api/dev/accounts` | nobody (dev only) | `routers/dev.py` | The dev login's account list: every active admin and manager, then up to two plain members flagged `can_sign_in: false` so the refusal can be shown. A 404 `not_found` unless `DEV_AUTH` is on, so it does not exist in production. |
 | `GET /api/people?unassigned=&admins=&q=&limit=&offset=` | signed in | `routers/people.py` | One page of the directory for the "Add person" and "Add admin" pickers and the admins list: active people, optionally only those on no team (never managers) or only those with admin access (on a team or not), filtered by name or email (`%` and `_` match literally). Paged, see below. |
+| `POST /api/people/sync` | admin | `routers/people.py` | A command: refresh the people directory from the Slack workspace now, the run the server also makes every week (`DIRECTORY_SYNC_SCHEDULE`). People in Slack are added, or have their name and email refreshed and are marked active again; people who have left are marked inactive, never deleted; admins, and every person's team, role and admin flag, are left alone; the `BOOTSTRAP_ADMIN_EMAILS` people are made admin. Bots, Slackbot, deactivated accounts, guests and people outside `ALLOWED_EMAIL_DOMAIN` are not listed. A run that would deactivate more than the larger of 20 people or 10% of the directory is refused (`directory_removal_too_large`; forced only from the command line, `make prod-sync-people ARGS=--allow-large-removal`). Written to the audit log (`directory.sync`, with the counts) under the admin's name. At most 3 a minute. Returns `{people, added, reactivated, deactivated, deactivated_on_a_team, new_admins, skipped}`. 501 `slack_not_configured`, 502 `slack_failed` or `directory_empty`. |
 | `PATCH /api/people/{id}/admin` | admin | `routers/people.py` | Make or revoke admin. Body `{is_admin, reason}`. Refuses a no-op and the last active admin. |
 | `GET /api/audit-log?limit=&offset=` | admin | `routers/people.py` | One page of audit entries, newest first. Paged, see below. Each entry carries `actor_name`, `person_name` and `team_name`, looked up when the page is built (`audit.names_for`); a deleted team keeps its name from the entry's `details`, and a person who no longer exists is `null`. |
 | `GET /api/teams` | signed in | `routers/teams.py` | Admin: every team. Manager: only their own. |
-| `POST /api/teams` | admin | `routers/teams.py` | Create a team. Body `{name, initial_manager_person_id, reason}`. The person becomes manager. Returns 201. |
+| `POST /api/teams` | admin | `routers/teams.py` | Create a team. Body `{name, initial_manager_person_id, reason, standup_channel_id}`; the standup channel is required (422 `channel_required` when blank). The person becomes manager. Returns 201. |
+| `PATCH /api/teams/{id}/standup-channel` | admin, or that team's manager | `routers/teams.py` | Set, change or clear the standup channel the team's suggestions are read from (`teams.standup_channel_id`). Body `{standup_channel_id (null or blank clears), reason}`; an admin must give a reason, the manager need not. Audited as `team.standup_channel_change`. 409 `same_channel`, 422 `invalid_channel`. |
 | `DELETE /api/teams/{id}` | admin | `routers/teams.py` | Delete a team for good. Body `{confirm_name, reason}`. Members go back to no team; the manager returns to member. Returns 204. |
 | `PATCH /api/teams/{id}/manager` | admin | `routers/teams.py` | Make another person the manager; the old one becomes a member and stays on the team. Body `{person_id, reason}`. |
 | `GET /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | People on the team, manager first. Each person carries `open_task_count`: the tasks assigned to them that are not Done (one grouped query, `members.open_task_counts`). It is `null` on every other endpoint that returns a person. The remove dialog warns with it. |
+| `GET /api/teams/{id}/channel-members` | admin, or that team's manager | `routers/teams.py` | A query: who is in the team's Slack channel (its standup channel) and in the directory, for the "Pull from Slack" review. Each person has a `state`: `available`, `on_this_team`, `on_other_team` (with `team_name`) or `unavailable` (inactive, or a manager); `not_in_directory` counts the Slack members the directory does not know. Asks Slack with the bot token (`conversations.members`); a private channel needs the bot invited. Errors say what is wrong: 409 `standup_channel_not_set`, 404 `channel_not_found`, 409 `bot_not_in_channel`, 501 `slack_not_configured`, 502 `slack_failed`. |
+| `POST /api/teams/{id}/members/bulk` | admin, or that team's manager | `routers/teams.py` | A command: add the ticked people together. Body `{person_ids (1 to 200), reason}`, reason optional. All or none: the first person who is inactive, on a team or a manager stops it with nothing added (409, the message names them). One audit row per person. Returns the people added. |
 | `POST /api/teams/{id}/members` | admin, or that team's manager | `routers/teams.py` | Add a person who is on no team. Body `{person_id, reason}`; the reason is optional. Returns 201. |
 | `DELETE /api/teams/{id}/members/{person_id}` | admin, or that team's manager | `routers/teams.py` | Take a person off the team (the dustbin). Optional body `{reason}`. The manager cannot be removed. Returns 204. |
 
@@ -42,10 +46,11 @@ Every failure is `{"detail": {"code", "message"}}`; match on `code`.
 | --- | --- |
 | 401 | `not_authenticated` |
 | 403 | `domain_not_allowed`, `not_onboarded`, `forbidden` |
-| 404 | `team_not_found`, `person_not_found`, `not_on_team` |
+| 404 | `team_not_found`, `person_not_found`, `not_on_team`, `channel_not_found` |
 | 409 | `team_name_taken`, `person_inactive`, `already_manager`, `already_on_team`, `same_manager`, `person_unavailable`, `is_manager`, `admin_unchanged`, `last_admin` |
 | 422 | `reason_required`, `reason_too_long`, `name_required`, `confirmation_mismatch`, `invalid_input` (text the database cannot store, such as a NUL character; any endpoint, nothing is written). A malformed body, id or paging value is also 422, but in FastAPI's own shape (`detail` is a list), not `{code, message}`. |
-| 501 | `auth_not_configured` |
+| 501 | `auth_not_configured`, `slack_not_configured` |
+| 502 | `slack_failed` |
 
 ## Folder map
 
@@ -59,13 +64,16 @@ server/identity/
 ├── services/
 │   ├── lookup.py          get_team / get_person (queries, 404 if missing)
 │   ├── teams.py           list_teams, get_team_with_count; create_team, change_manager, delete_team
-│   ├── members.py         list_members, get_member; add_member, remove_member
+│   ├── members.py         list_members, get_member; add_member, add_members, remove_member
+│   ├── channel_members.py list_channel_members (a query: the team's Slack channel matched to the directory)
+│   ├── directory_sync.py  sync_directory, sync_from_slack (commands: the people from Slack); members_from_slack, people_in_slack, last_run (queries)
 │   ├── admin_access.py    set_admin
 │   ├── directory.py       search_people (the picker, one page + total)
 │   ├── dev_accounts.py    list_dev_accounts (the dev login's list)
 │   └── audit.py           record, clean_reason, list_entries (one page + total)
+├── directory_scheduler.py the weekly people sync from Slack: `python -m identity.directory_scheduler [--once] [--allow-large-removal]` (the `directory-sync` service; `make db-sync-people`, `make prod-sync-people`)
 ├── schemas.py             request and response models
-└── states.py              audit action names
+└── states.py              audit action names (including `directory.sync`)
 ```
 
 Shared code used here, kept outside the feature: `server/models/` (tables), `server/security/` (`authentication.py` who is calling, `authorization.py` what they may do), `server/database/`, `server/core/` (settings, `AppError`), `server/migrations/` (Alembic).
@@ -79,7 +87,7 @@ Shared code used here, kept outside the feature: `server/models/` (tables), `ser
 ## Not built yet
 
 - Google sign-in (last): `GET /auth/google`, `GET /auth/google/callback`, `GET /auth/google/exchange?code=`, a new `server/auth/` feature; planned in `docs/DEPLOYMENT.md` and `docs/WORKLOG.md` (step 9).
-- The weekly Slack pull to refresh the directory (Phase 2); today the directory loads from `PEOPLE_FILE` (default `seed/people.json`) with `make db-seed`.
+- (Reassigning a task now sends the new assignee a Slack DM card with the earlier thread under it; see `server/slack/README.md`.)
 
 Tasks are built (`server/tasks/README.md`): a removed person's open tasks show as "needs a new owner", and a deleted team takes its tasks with it.
 

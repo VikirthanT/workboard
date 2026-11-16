@@ -119,6 +119,8 @@ The UI hides controls from the permission rules, but **every rule is enforced ag
 3. **NPI sandbox**, then the other Engineering teams.
 4. **Phase 2:** Slack bot and the weekly directory pull.
 5. **Later branch:** standup suggestions and the weekly handover checklist, brought back from the snapshot.
+6. **Later phases (todo):** quick-add from Slack. A message shortcut ("Create Workboard task" in a message's menu) opens a form pre-filled with the message text as the title and a link back to the message; the manager picks the assignee, priority and due date. Managers only and only for their own team, both enforced on the server. No slash commands are planned.
+7. **Later phases (todo):** project as a managed tag. Today Project is free text on a task. Later it becomes one workboard-wide list of project names (not per team): the task form's Project is a searchable dropdown with a "Create project" option when the name is missing, a Projects button beside Reports lists every project name (names only, no tasks), and the upload template's Project column becomes a dropdown. An upload that names a project not on the list asks the manager "Create these projects?"; if they say no, those tasks are created with no project tag. Project stays optional on every task, and a migration turns today's free text into the first list.
 
 ## 9. Decisions, risks, asks
 

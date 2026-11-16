@@ -27,7 +27,8 @@ cd server
 | `test_members.py` | 11 | People on a team, the "Add person" picker, the open-task count on the members list (Done and other teams' tasks not counted; null elsewhere) |
 | `test_team_delete.py` | 7 | Deleting a team |
 | `test_admin_access.py` | 10 | Make / Revoke admin, append-only audit log |
-| `test_seed_loader.py` | 13 | `seed/load_db.py`: directory load, people who left, bootstrap admins |
+| `test_directory_sync.py` | 26 | The people sync from Slack: who is listed, the merge rules, the removal limit, bootstrap admins, the audit entry of each run, the admin's "Sync people" endpoint and its 3 a minute limit, the paged `users.list` call, the runner |
+| `test_schedule.py` | 5 | The shared schedule format (`sun 22:00`, `tue 12:00, wed 12:00`): parsing and the next run |
 | `test_access_matrix.py` | 55 | Every endpoint against every kind of caller |
 | `test_validation.py` | 22 | Malformed input (422), ids that do not exist (404), reasons |
 | `test_team_rules.py` | 8 | Create-team and change-manager edge cases, refusals change nothing |
@@ -124,22 +125,28 @@ cd server
 | `grant_and_revoke_are_audited` | Both actions create rows with the actor, reason and action name. |
 | `the_audit_log_cannot_be_changed_even_with_raw_sql` | A direct `UPDATE` or `DELETE` fails in the database with "append-only". |
 
-## `test_seed_loader.py`: the directory loader (`seed/load_db.py`)
+## `test_directory_sync.py`: the people sync from Slack (`identity/services/directory_sync.py`)
 
 | Test | Verifies |
 | --- | --- |
-| `read_directory_keeps_good_rows_and_says_why_it_skipped_the_rest` | Emails are trimmed and lowercased; rows with a blank name, a wrong domain, or a duplicate email or Slack id are skipped, each with a reason. |
-| `a_missing_directory_file_stops_with_a_clear_message` | A missing directory file exits with an "is missing" message. |
-| `loading_twice_adds_nobody_new` | Running the load again does not duplicate anyone. |
-| `a_reload_refreshes_name_and_email_but_never_role_team_or_admin` | A reload updates a person's name and email but leaves a manager's role and team alone. |
-| `people_missing_from_the_file_are_deactivated_not_deleted` | Slack is the source of truth: someone absent from the file is marked inactive, and the row is kept. |
-| `an_admin_missing_from_the_file_is_never_deactivated` | An admin can't be locked out by a file that leaves them out. |
-| `someone_who_comes_back_in_the_file_is_active_again` | A person who reappears in the file is reactivated. |
-| `a_deactivated_person_is_not_offered_in_the_picker_and_cannot_sign_in` | After deactivation they vanish from the "Add person" picker and are refused at sign-in. |
-| `a_file_that_would_remove_too_many_people_is_refused_unless_forced` | Deactivating more than the larger of 20 people or 10% needs `--allow-large-removal`; nothing changes without it. |
-| `a_deactivated_person_still_on_a_team_is_reported` | The loader reports a deactivated person who is still on a team, so an admin can deal with them. |
-| `bootstrap_admins_are_granted_once_and_audited` | The first run grants admin and writes one `admin.grant` audit row; a second run grants nothing. |
-| `a_bootstrap_admin_who_is_not_in_the_directory_stops_the_load` | An address not in the directory aborts with a clear message. |
+| `the_listed_people_come_from_the_workspace_...` | Emails are trimmed and lowercased; the full name is used when there is no display name. |
+| `bots_slackbot_deactivated_accounts_and_guests_are_left_out_...` | None of them is listed, and none is noted. |
+| `a_person_skipped_for_a_reason_worth_reading_is_noted` | A blank name or email, a wrong domain or a duplicate is skipped with a reason. |
+| `running_it_twice_adds_nobody_new_...` | A second run duplicates nobody, and each run is a `directory.sync` audit row (no actor for the server's own run). |
+| `a_run_refreshes_name_and_email_but_never_role_team_or_admin` | A manager's role and team survive a run. |
+| `people_missing_from_slack_are_deactivated_not_deleted_and_admins_never` | Someone gone from Slack is marked inactive and the row is kept; an admin is never deactivated. |
+| `someone_who_comes_back_in_slack_is_active_again_and_counted` | A returning person is reactivated and counted. |
+| `a_deactivated_person_is_not_offered_in_the_picker_and_cannot_sign_in` | After deactivation they vanish from "Add person" and are refused at sign-in. |
+| `a_deactivated_person_still_on_a_team_is_counted` | The audit entry counts deactivated people who are on a team. |
+| `a_slack_email_that_already_belongs_to_another_person_here_is_skipped_...` | A clash with the unique email skips that account instead of breaking the run. |
+| `a_person_still_in_slack_with_no_usable_email_is_not_treated_as_having_left` | A data problem in Slack's entry does not deactivate anyone. |
+| `a_run_that_would_remove_too_many_people_is_refused_unless_forced` | More than the larger of 20 people or 10% needs the forced flag; nothing changes without it. |
+| `a_slack_list_with_nobody_usable_changes_nothing` | An empty or truncated answer is a 502 `directory_empty`, not a mass deactivation. |
+| `the_bootstrap_admins_...`, `a_bootstrap_admin_who_is_not_in_slack_...` | The listed emails are made admin once with an audit row; one not in Slack is reported and does not stop the run. |
+| `the_run_shows_in_the_admins_audit_log_...` | The Who column is empty for the server's own run. |
+| `an_admin_syncs_the_people_...`, `nobody_but_an_admin_...`, `the_button_says_why_...`, `..._refused_from_the_button_...`, `an_admin_can_press_the_button_three_times_a_minute_...` | The endpoint: recorded under the admin's name, admin only, the server's words for no Slack or a failed read, no way to force a large removal, 3 a minute. |
+| `the_workspace_list_follows_slacks_pages_...`, `a_list_that_never_ends_is_an_error_...` | `users.list` is read 200 at a time until there is no cursor; a list that never ends is an error, not a short list. |
+| the runner tests | A run says what it did; with no token it says so and exits 0; a failed or refused run is logged and `--once` exits 1; `--allow-large-removal` forces it. |
 
 ## `test_access_matrix.py`: who may call what
 

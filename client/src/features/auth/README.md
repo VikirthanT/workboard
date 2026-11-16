@@ -15,7 +15,10 @@ Sign-in. Only users (admins and managers) can sign in; anyone else gets `not_onb
 
 ```
 auth/
-├── LoginPage.tsx
+├── LoginPage.tsx          split layout ported from Watchtower: copy left, sign-in card right, logo bottom left
+├── LoginPattern.tsx       the ATI block pattern in the top right corner (SVG, brand tokens)
+├── login-page.css         the layout's sizes and animation, so the markup has no text-[ / rounded-[
+├── DevAccountChooser.tsx  development only: the account list the button opens
 ├── hooks/                 useDevSignIn, useGoogleExchange, useSignOut, useDevAccounts
 └── index.ts
 ```

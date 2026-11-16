@@ -2,8 +2,9 @@
    `GET /teams/{id}` 405) fails here. The mappers are replaced by pass-throughs: their output is tested in mappers.test.ts. */
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { apiClient } from './axiosInstance';
-import { addMember, changeManager, createTeam, deleteTeam, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
+import { addMember, addMembers, changeManager, createTeam, deleteTeam, getChannelMembers, getTeamMembers, getTeams, removeMember, searchUnassignedPeople } from './teams';
 import { getAdmins, getAudit, searchPeople, setAdmin } from './admin';
+import { addSuggestions, editSuggestion, getChannelName, getStandupChannels, getSuggestions, rejectSuggestion, restoreSuggestion, suggestTasks, syncSuggestions } from './standups';
 import { addComment, createTask, deleteTask, getBoard, getTask, moveTask, updateTask } from './tasks';
 import { getAllTeamsReport, getTeamReport } from './reports';
 import { devSignIn, endServerSession, exchangeGoogleCode, getDevAccounts, getMe } from './auth';
@@ -14,7 +15,7 @@ vi.mock('./mappers', async (importOriginal) => {
   return {
     ...real,
     mapTeam: same, mapPerson: same, mapAudit: same, mapTask: same, mapActivity: same, mapSummary: same, mapBoardTeam: same,
-    mapTeamReport: same, mapAllTeamsReport: same, mapRealMe: same,
+    mapTeamReport: same, mapAllTeamsReport: same, mapRealMe: same, mapSuggestion: same, mapSuggestionsPage: same, mapStandupChannel: same,
     mapPage: (p: { items: unknown[] }, f: (x: unknown) => unknown) => ({ ...p, items: p.items.map(f) }),
   };
 });
@@ -45,8 +46,8 @@ describe('teams service', () => {
   });
 
   it('creates a team with POST /teams and snake_case keys', async () => {
-    await createTeam({ name: 'NPI', initialManagerPersonId: 'p1', reason: 'new team' });
-    expect(post).toHaveBeenCalledWith('/teams', { name: 'NPI', initial_manager_person_id: 'p1', reason: 'new team' });
+    await createTeam({ name: 'NPI', initialManagerPersonId: 'p1', reason: 'new team', standupChannelId: 'C0NPI' });
+    expect(post).toHaveBeenCalledWith('/teams', { name: 'NPI', initial_manager_person_id: 'p1', reason: 'new team', standup_channel_id: 'C0NPI' });
   });
 
   it('deletes a team with DELETE and the confirmation in the body', async () => {
@@ -74,11 +75,74 @@ describe('teams service', () => {
     expect(post).toHaveBeenLastCalledWith('/teams/t1/members', { person_id: 'p2', reason: undefined });
   });
 
+  it('reads the Slack channel members with GET and adds the ticked people together with POST', async () => {
+    get.mockResolvedValue({ data: { channel_id: 'C0NPI', members: [], not_in_directory: 0 } });
+    await getChannelMembers('t1');
+    expect(get).toHaveBeenLastCalledWith('/teams/t1/channel-members');
+
+    await addMembers({ teamId: 't1', personIds: ['p1', 'p2'], reason: 'from Slack' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/members/bulk', { person_ids: ['p1', 'p2'], reason: 'from Slack' });
+    await addMembers({ teamId: 't1', personIds: ['p1'], reason: '' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/members/bulk', { person_ids: ['p1'], reason: undefined });
+  });
+
   it('removes a member with DELETE /teams/{id}/members/{person}', async () => {
     await removeMember({ teamId: 't1', personId: 'p2', reason: 'left' });
     expect(del).toHaveBeenLastCalledWith('/teams/t1/members/p2', { data: { reason: 'left' } });
     await removeMember({ teamId: 't1', personId: 'p2', reason: '' });
     expect(del).toHaveBeenLastCalledWith('/teams/t1/members/p2', { data: { reason: undefined } });
+  });
+});
+
+describe('standups service', () => {
+  it('lists the standup channels with GET /standups/channels', async () => {
+    await getStandupChannels();
+    expect(get).toHaveBeenCalledWith('/standups/channels');
+  });
+
+  it('looks up a channel name by its id, escaping the id', async () => {
+    get.mockResolvedValue({ data: { id: 'C0NPI', name: 'standup-npi' } });
+    expect(await getChannelName('C0NPI')).toEqual({ id: 'C0NPI', name: 'standup-npi' });
+    expect(get).toHaveBeenLastCalledWith('/standups/channels/C0NPI');
+    await getChannelName('a/b');
+    expect(get).toHaveBeenLastCalledWith('/standups/channels/a%2Fb');
+  });
+
+  it('reads a team\'s suggestions with GET and syncs with POST (both return the page)', async () => {
+    await getSuggestions('t1');
+    expect(get).toHaveBeenCalledWith('/teams/t1/suggestions');
+    await syncSuggestions({ teamId: 't1' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/sync');
+  });
+
+  it('suggests for the team with POST, or for one person with the person_id query parameter', async () => {
+    await suggestTasks({ teamId: 't1' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/suggest');
+    await suggestTasks({ teamId: 't1', personId: 'p2' });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/suggest', undefined, { params: { person_id: 'p2' } });
+  });
+
+  it('adds suggestions with POST, the ids in snake_case and the due dates by suggestion id', async () => {
+    await addSuggestions({ teamId: 't1', suggestionIds: ['s1', 's2'], dueDates: { s1: '2026-12-01', s2: '2026-12-02' } });
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/add', {
+      suggestion_ids: ['s1', 's2'], due_dates: { s1: '2026-12-01', s2: '2026-12-02' },
+    });
+    await addSuggestions({ teamId: 't1', suggestionIds: ['s1'] }); // no dates given: none are sent
+    expect(post).toHaveBeenLastCalledWith('/teams/t1/suggestions/add', { suggestion_ids: ['s1'], due_dates: undefined });
+  });
+
+  it('edits with PATCH sending only the fields given, and a null date to clear it', async () => {
+    await editSuggestion({ id: 's1', patch: { priority: 'high', personId: 'p2', dueAt: null } });
+    const [url, body] = patch.mock.calls.at(-1)!;
+    expect(url).toBe('/suggestions/s1');
+    expect(JSON.parse(JSON.stringify(body))).toEqual({ priority: 'high', person_id: 'p2', due_at: null }); // undefined fields are dropped on the wire
+  });
+
+  it('rejects and restores with POST', async () => {
+    await rejectSuggestion('s1');
+    expect(post).toHaveBeenLastCalledWith('/suggestions/s1/reject');
+    await restoreSuggestion('s1');
+    expect(post).toHaveBeenLastCalledWith('/suggestions/s1/restore');
   });
 });
 
@@ -106,10 +170,10 @@ describe('admin service', () => {
 describe('tasks service', () => {
   it('sends only the board filters that are set', async () => {
     get.mockResolvedValue({ data: board });
-    await getBoard({ teamId: null, personId: null, attention: false, filters: [] } as never);
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined, limit: 5, show: undefined } });
-    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'] } as never, { todo: 10, done: 15 });
-    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked', limit: 5, show: 'todo:10,done:15' } });
+    await getBoard({ teamId: null, personId: null, attention: false, filters: [], search: '' } as never);
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: undefined, attention: undefined, person: undefined, filter: undefined, q: undefined, limit: 5, show: undefined } });
+    await getBoard({ teamId: 't1', personId: 'p2', attention: true, filters: ['overdue', 'blocked'], search: ' #33 ' } as never, { todo: 10, done: 15 });
+    expect(get).toHaveBeenLastCalledWith('/board', { params: { team: 't1', attention: true, person: 'p2', filter: 'overdue,blocked', q: '#33', limit: 5, show: 'todo:10,done:15' } });
   });
 
   it('reads one task with GET /tasks/{id}', async () => {

@@ -14,4 +14,4 @@ export const person = (over: Partial<PersonRecord> = {}): PersonRecord => ({
   ...over,
 });
 
-export const team = (over: Partial<TeamRecord> = {}): TeamRecord => ({ id: 't1', name: 'Alpha', manager: null, memberCount: 0, ...over });
+export const team = (over: Partial<TeamRecord> = {}): TeamRecord => ({ id: 't1', name: 'Alpha', manager: null, memberCount: 0, standupChannelId: null, ...over });

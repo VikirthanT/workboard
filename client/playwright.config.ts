@@ -17,7 +17,9 @@ export default defineConfig({
       command: '.venv/bin/uvicorn main:app --port 8100',
       cwd: '../server',
       url: `${API}/api/health`,
-      env: { ...process.env, DEV_AUTH: 'true', TZ: 'Asia/Kolkata' } as Record<string, string>,
+      // The Slack tokens are blanked: a browser test must never reach the real workspace (which `make e2e` would otherwise
+      // pass in from .env), and with them blank Slack is simply "not set up" for the tests.
+      env: { ...process.env, DEV_AUTH: 'true', TZ: 'Asia/Kolkata', SLACK_BOT_TOKEN: '', SLACK_APP_TOKEN: '' } as Record<string, string>,
       reuseExistingServer: false,
     },
     {

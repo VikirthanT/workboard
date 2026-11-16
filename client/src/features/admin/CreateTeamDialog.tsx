@@ -6,6 +6,7 @@ import { useToast } from '../../app/components/ui/toast';
 import type { PersonRecord } from '../../app/types/types';
 import { errorMessage } from '../../services/api';
 import { ReasonFormDialog, useUnassignedPeople } from '../team';
+import { StandupChannelField } from './StandupChannelField';
 import { useCreateTeam } from './hooks';
 
 /** A new team starts with one person from the directory, who becomes its manager; more people are added afterwards. */
@@ -16,7 +17,8 @@ export function CreateTeamDialog({ open, onClose }: { open: boolean; onClose: ()
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [manager, setManager] = useState<PersonRecord | null>(null);
-  useEffect(() => { if (open) { setName(''); setManager(null); setQ(''); } }, [open]);
+  const [channel, setChannel] = useState('');
+  useEffect(() => { if (open) { setName(''); setManager(null); setQ(''); setChannel(''); } }, [open]);
 
   const list = candidates.data ?? [];
 
@@ -32,8 +34,9 @@ export function CreateTeamDialog({ open, onClose }: { open: boolean; onClose: ()
       onSubmit={(reason, fail) => {
         if (!name.trim()) return fail('Give the team a name.');
         if (!manager) return fail('Choose the team’s first person, who becomes its manager.');
+        if (!channel.trim()) return fail('Choose the team’s standup channel.');
         create.mutate(
-          { name: name.trim(), initialManagerPersonId: manager.id, reason },
+          { name: name.trim(), initialManagerPersonId: manager.id, reason, standupChannelId: channel.trim() },
           { onSuccess: (t) => { toast(`${t.name} created.`, 'success'); onClose(); }, onError: (e) => fail(errorMessage(e)) },
         );
       }}
@@ -55,6 +58,7 @@ export function CreateTeamDialog({ open, onClose }: { open: boolean; onClose: ()
           </SelectContent>
         </Select>
       </div>
+      <StandupChannelField open={open} value={channel} onChange={setChannel} />
     </ReasonFormDialog>
   );
 }

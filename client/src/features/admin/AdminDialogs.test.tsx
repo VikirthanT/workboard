@@ -3,13 +3,20 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateTeamDialog } from './CreateTeamDialog';
 import { DeleteTeamDialog } from './DeleteTeamDialog';
+import { EditStandupChannelDialog } from './EditStandupChannelDialog';
 import { AdminToggleDialog, ManagerChangeDialog } from './PersonDialogs';
 import { AddAdminDialog } from './AddAdminDialog';
 import { person, team } from '../../test/fixtures';
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), toast: vi.fn(), unassigned: { data: [] as unknown[] }, admins: { data: [] as unknown[] } }));
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(), toast: vi.fn(), unassigned: { data: [] as unknown[] }, admins: { data: [] as unknown[] },
+  channels: { data: [{ id: 'C0NPI', name: 'standup-npi' }, { id: 'C0QA', name: 'standup-qa' }], isError: false } as { data?: unknown[]; isError: boolean },
+}));
 vi.mock('./hooks', () => ({
   useCreateTeam: () => ({ mutate: h.mutate, isPending: false }),
+  useSetStandupChannel: () => ({ mutate: h.mutate, isPending: false }),
+  useStandupChannels: () => h.channels,
+  useChannelName: () => ({ data: undefined, isError: false, error: null }),
   useDeleteTeam: () => ({ mutate: h.mutate, isPending: false }),
   useChangeManager: () => ({ mutate: h.mutate, isPending: false }),
   useSetAdmin: () => ({ mutate: h.mutate, isPending: false }),
@@ -30,6 +37,7 @@ beforeEach(() => {
   h.toast.mockReset();
   h.unassigned = { data: [ann] };
   h.admins = { data: [ann, bob] };
+  h.channels = { data: [{ id: 'C0NPI', name: 'standup-npi' }, { id: 'C0QA', name: 'standup-qa' }], isError: false };
 });
 
 describe('CreateTeamDialog', () => {
@@ -37,6 +45,10 @@ describe('CreateTeamDialog', () => {
   const pickManager = async () => {
     await userEvent.click(screen.getByRole('combobox', { name: /Manager/ }));
     await userEvent.click(await screen.findByRole('option', { name: /Ann Member/ }));
+  };
+  const pickChannel = async (name = 'standup-npi') => {
+    await userEvent.click(screen.getByRole('combobox', { name: /Standup channel/ }));
+    await userEvent.click(await screen.findByRole('option', { name }));
   };
 
   it('needs a name', async () => {
@@ -56,15 +68,38 @@ describe('CreateTeamDialog', () => {
     expect(h.mutate).not.toHaveBeenCalled();
   });
 
-  it('creates the team with the trimmed name, the chosen manager and the reason', async () => {
+  it('needs a standup channel', async () => {
+    open();
+    await userEvent.type(screen.getByLabelText('Team name'), 'Beta');
+    await pickManager();
+    await reason();
+    await userEvent.click(screen.getByRole('button', { name: 'Create team' }));
+    expect(await alert()).toHaveTextContent(/Choose the team.s standup channel/);
+    expect(h.mutate).not.toHaveBeenCalled();
+  });
+
+  it('lets the admin type the channel id when the channel list cannot be loaded', async () => {
+    h.channels = { isError: true };
+    succeed({ name: 'Beta' });
+    open();
+    await userEvent.type(screen.getByLabelText('Team name'), 'Beta');
+    await pickManager();
+    await userEvent.type(screen.getByLabelText(/Standup channel/), ' C0TYPED ');
+    await reason();
+    await userEvent.click(screen.getByRole('button', { name: 'Create team' }));
+    expect(h.mutate).toHaveBeenCalledWith(expect.objectContaining({ standupChannelId: 'C0TYPED' }), expect.anything());
+  });
+
+  it('creates the team with the trimmed name, the chosen manager, the channel and the reason', async () => {
     const onClose = vi.fn();
     succeed({ name: 'Beta' });
     open(onClose);
     await userEvent.type(screen.getByLabelText('Team name'), '  Beta ');
     await pickManager();
+    await pickChannel();
     await reason('new team');
     await userEvent.click(screen.getByRole('button', { name: 'Create team' }));
-    expect(h.mutate).toHaveBeenCalledWith({ name: 'Beta', initialManagerPersonId: 'a', reason: 'new team' }, expect.anything());
+    expect(h.mutate).toHaveBeenCalledWith({ name: 'Beta', initialManagerPersonId: 'a', reason: 'new team', standupChannelId: 'C0NPI' }, expect.anything());
     expect(h.toast).toHaveBeenCalledWith('Beta created.', 'success');
     expect(onClose).toHaveBeenCalled();
   });
@@ -74,9 +109,39 @@ describe('CreateTeamDialog', () => {
     open();
     await userEvent.type(screen.getByLabelText('Team name'), 'Beta');
     await pickManager();
+    await pickChannel();
     await reason();
     await userEvent.click(screen.getByRole('button', { name: 'Create team' }));
     expect(await alert()).toHaveTextContent('A team with that name exists.');
+  });
+});
+
+describe('EditStandupChannelDialog', () => {
+  const npi = team({ id: 't1', name: 'NPI', standupChannelId: 'C0NPI' });
+
+  it('renders nothing without a team', () => {
+    render(<EditStandupChannelDialog team={null} onClose={vi.fn()} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('refuses to save the channel the team already has', async () => {
+    render(<EditStandupChannelDialog team={npi} onClose={vi.fn()} />);
+    await reason();
+    await userEvent.click(screen.getByRole('button', { name: 'Save channel' }));
+    expect(await alert()).toHaveTextContent('That is already the team’s channel.');
+    expect(h.mutate).not.toHaveBeenCalled();
+  });
+
+  it('saves a different channel with the reason', async () => {
+    const onClose = vi.fn();
+    succeed();
+    render(<EditStandupChannelDialog team={npi} onClose={onClose} />);
+    await userEvent.click(screen.getByRole('combobox', { name: /Standup channel/ }));
+    await userEvent.click(await screen.findByRole('option', { name: 'standup-qa' }));
+    await reason('moved');
+    await userEvent.click(screen.getByRole('button', { name: 'Save channel' }));
+    expect(h.mutate).toHaveBeenCalledWith({ teamId: 't1', standupChannelId: 'C0QA', reason: 'moved' }, expect.anything());
+    expect(onClose).toHaveBeenCalled();
   });
 });
 
