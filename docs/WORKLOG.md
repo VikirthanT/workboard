@@ -62,6 +62,26 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
 
+## 16 Nov 2026 (later): standup database copy
+
+**Summary.** On `main`. On prod the Suggestions page said "The standup database could not be opened". Cause, found on the server: the standup app's `standup.db` is in WAL mode (header bytes 19-20 are `02 02`), and a reader of a WAL database must be able to create the `-shm` / `-wal` files next to it; the API container mounts the folder read only and runs as uid 10001 (the folder is owned by uid 1000), so SQLite answered "unable to open database file". `immutable=1` opened it, which is why the file looked readable. Decided with the user: the API reads a copy, not the live file; the copy lives inside the workboard folder (`./standup-snapshot`, gitignored); the owner of the standup app is told.
+
+**Commits.** `51ff91f` Update the admin Suggestions e2e spec for the Sync and Suggest buttons. `9fe20f3` Read a copy of the standup database, not the live file.
+
+**What changed.**
+- `scripts/standup_snapshot.py`: copies the live file with SQLite's backup call (read only on the live file), switches the copy to the ordinary rollback journal, checks it, and moves it into place with one rename; a failed run keeps the previous copy. Standard library only. Tests: `server/tests/test_standup_snapshot.py` (WAL source, copy not WAL, opens from a folder nobody can write to, newer data on a later run, failed run keeps the old copy, command line).
+- `make prod-standup-snapshot` runs it (`STANDUP_SOURCE`, `STANDUP_SNAPSHOT_DIR` as `make` arguments; the target does not read `.env`).
+- `docker-compose.yml`: `server` and `scheduler` mount `${STANDUP_DB_DIR:-./standup-snapshot}` at `/opt/standup-snapshot:ro`, so `STANDUP_DB_URL` is `sqlite:////opt/standup-snapshot/standup.db`. The live `/opt/standup-bot` folder (it holds the standup app's `.env`) is no longer mounted. `server/tests/test_deployment_config.py` pins both.
+- `client/e2e/process.spec.ts`: the admin spec looked for "Sync now"; it now expects the **Sync** and **Suggest** buttons.
+- Docs: `docs/DEPLOYMENT.md` ("The standup database copy" with the one-time steps and the cron line), `.env.example`, `server/standups/README.md`.
+- Considered and dropped for now (decided with the user): a `make prod-deploy` that fetches, rebuilds and recreates nginx. Building on the 2-core server is slow; a real Watchtower-style flow would build the images elsewhere (for example GitHub Actions to a registry) and only pull on the server. Not built.
+
+**One-time steps on the server (the user runs them; not done).** As `ubuntu` in `/opt/workboard`: `make prod-standup-snapshot`; set `STANDUP_DB_URL=sqlite:////opt/standup-snapshot/standup.db` in `.env` (quote values with spaces; two lines in the server's `.env` were being run as shell commands, `22:00` and `12:00,`); `docker compose up -d`; add the cron line from `docs/DEPLOYMENT.md`.
+
+**How it was checked.** `make e2e`: all 8 specs passed after the e2e fix. `make server-test`: 1064 passed, after the compose test change.
+
+**Not done or not verified.** The snapshot has not been run against the real server's file, and the Suggestions page has not been checked against it. The owner of the standup app has not been told yet (the user is doing that).
+
 ## 16 Nov 2026: Suggestions page, Sync and Suggest are two buttons
 
 **Summary.** On `dev`: one "Sync now" button used to read the standup channel and run the language model together. Sync now only reads (quick, no model); Suggest runs the model, for everyone or one person. Decided with the user: Sync = read only, Suggest = model; no per-person Sync (it is read only anyway); a master Suggest sits beside Sync.
