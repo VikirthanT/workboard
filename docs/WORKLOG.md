@@ -62,6 +62,18 @@ One part at a time; each part ends with `make typecheck`, `make test` and, once 
 - **Team:** one manager, a set of people, one board.
 - **Needs a new owner:** an open task whose assignee is inactive or no longer on the team.
 
+## 16 Nov 2026: Suggestions page, Sync and Suggest are two buttons
+
+**Summary.** On `dev`: one "Sync now" button used to read the standup channel and run the language model together. Sync now only reads (quick, no model); Suggest runs the model, for everyone or one person. Decided with the user: Sync = read only, Suggest = model; no per-person Sync (it is read only anyway); a master Suggest sits beside Sync.
+
+**Commits.**
+- `cec7132` Split Suggestions Sync from Suggest. Server: `POST /api/teams/{id}/suggestions/sync` reads the channel and records "Last sync" (no model call, no `person_id`, shares the 20-a-minute Slack-read limit); new `POST /api/teams/{id}/suggestions/suggest?person_id=` runs the model (3 a minute per login); `services/sync.py` has `sync_team` and `suggest_team`, the scheduler still runs both. Client: top **Sync** (renamed from "Sync now") and **Suggest**, plus **Suggest for <name>** per person; `syncSuggestions`, `suggestTasks`, `useSyncSuggestions`, `useSuggestTasks`. Tests and the two feature READMEs updated.
+- Docs follow-up (this entry): `docs/FEATURE_GUIDE.md` endpoint table, scheduler line and rate limits.
+
+**How it was checked.** `make server-test`: 1059 passed. Client: vitest for `features/suggestions` and `services` 93 passed after the last change (the full suite, 295, passed before the master Suggest button was added); `tsc --noEmit` clean before it.
+
+**Not done or not verified.** Not looked at in a browser in light and dark. The full client suite was not rerun after the master Suggest button.
+
 ## 15 Nov 2026: board search, task number on cards, Slack Home tab, feature guide
 
 **Summary.** On `feature-update/suggestion` (after `6564b36`): the board gets a search box and a task number on each card; the Slack Home tab, Details popup and shared Slack connection are committed; a manager can set their own team's standup channel; a feature guide is added. Not pushed, nothing merged.
