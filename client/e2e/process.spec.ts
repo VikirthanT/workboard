@@ -105,7 +105,8 @@ test.describe('suggestions', () => {
 
     await expect(page.getByText(/Read-only view of/)).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Team' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sync now' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Sync', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Suggest', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: /^Add \(/ })).toHaveCount(0);
     for (const name of ['Select', 'Edit', 'Reject', 'Restore']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
 
