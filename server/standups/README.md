@@ -25,7 +25,7 @@ All under `/api`. Every endpoint needs a signed-in person (401 otherwise).
 
 ## Rate limits
 
-Every signed-in endpoint counts against 300 calls a minute per person. Two are tighter, per person, because they cost something: **sync** (`POST /api/teams/{id}/suggestions/sync`, whole team or one person) is 3 a minute since it runs the language model, and the Slack-backed lookups (`GET /api/standups/channels/{id}` here and `GET /api/teams/{id}/channel-members` in identity) share 20 a minute. Over a limit is 429 `rate_limited` with a `Retry-After` hint. The scheduled sync is not counted. Constants: `SYNC_PER_MINUTE`, `SLACK_READ_PER_MINUTE` in `server/security/rate_limit.py`.
+Every signed-in endpoint counts against 300 calls a minute per login (one signed-in manager or admin; all their browsers and tabs share it). Two are tighter, per login, because they cost something: **sync** (`POST /api/teams/{id}/suggestions/sync`, whole team or one person) is 3 a minute since it runs the language model, and the Slack-backed lookups (`GET /api/standups/channels/{id}` here and `GET /api/teams/{id}/channel-members` in identity) share 20 a minute. Over a limit is 429 `rate_limited` with a `Retry-After` hint. The scheduled sync is not counted. Constants: `SYNC_PER_MINUTE`, `SLACK_READ_PER_MINUTE` in `server/security/rate_limit.py`.
 
 ## Errors
 
