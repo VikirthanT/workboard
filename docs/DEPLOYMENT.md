@@ -188,15 +188,34 @@ settings empty each part stays off and the rest of the stack runs as before.
 
 | What | Setting in `.env` | Where it runs |
 | --- | --- | --- |
-| The standup database (read only) | `STANDUP_DB_URL=sqlite:////opt/standup-bot/standup.db`, and `STANDUP_DB_DIR` if the folder is somewhere else on the host | The API container. The folder is mounted read only at `/opt/standup-bot`; the container's user (uid 10001) must be able to read it. |
+| The standup database (read only, a copy) | `STANDUP_DB_URL=sqlite:////opt/standup-snapshot/standup.db`, and `STANDUP_DB_DIR` if the copy's folder is not `./standup-snapshot` | The API container. The folder is mounted read only at `/opt/standup-snapshot`; the container's user (uid 10001) must be able to read it. See "The standup database copy" below. |
 | The language model for suggestions | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` (`LLM_BASE_URL` only for an OpenAI-compatible host) | The API container |
 | Channel announcements and DM cards | `SLACK_BOT_TOKEN` | The API container |
 | DM buttons and the update form | `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` | The `slack` container (the API's image with `python -m slack.listener`). It connects out to Slack, so it needs no public address. Without both tokens it says so in its log and idles. |
 
 How to create the app and get the tokens: `docs/SLACK_SETUP.md`. Check the listener with `docker compose logs slack`.
 
-Not verified here: the standup folder mount against the real server. If the standup app keeps its database in WAL mode, a
-read-only mount may stop SQLite opening it; check `PRAGMA journal_mode` on the real file before the first deploy.
+### The standup database copy
+
+The standup app keeps its database in WAL mode (checked on the real file: bytes 19-20 of the header are `02 02`). A
+reader of a WAL database must be able to create the `-shm` and `-wal` side files next to it; the API container mounts its
+folder read only and runs as uid 10001, so SQLite answered "unable to open database file". So the API does not read the
+live file. `make prod-standup-snapshot` (`scripts/standup_snapshot.py`, standard library only) reads the live file with
+SQLite's backup call, saves a plain copy in `standup-snapshot/` (gitignored: it holds real standup text) and moves it
+into place in one step; if a run fails the previous copy stays. The live file is only read, and nothing in
+`/opt/standup-bot` is changed or moved.
+
+One-time setup on the server, as the user that owns the standup database (`ubuntu`):
+
+1. `cd /opt/workboard && make prod-standup-snapshot` (it prints `Snapshot written: ...`).
+2. Set `STANDUP_DB_URL=sqlite:////opt/standup-snapshot/standup.db` in the server's `.env` (quote any value that has spaces).
+3. `docker compose up -d` so the API and the scheduler mount the folder and pick up the new path.
+4. Add it to cron so the copy stays fresh, for example
+   `*/5 * * * * cd /opt/workboard && make --no-print-directory prod-standup-snapshot >> standup-snapshot.log 2>&1`.
+
+The suggestions read data up to the cron interval old, which suits a weekly standup read. Check it by pressing Sync on the
+Suggestions page. Other paths: `make prod-standup-snapshot STANDUP_SOURCE=... STANDUP_SNAPSHOT_DIR=...` (that target does
+not read `.env`; keep `STANDUP_DB_DIR` and `STANDUP_SNAPSHOT_DIR` the same folder).
 
 ## Later: HTTPS (when there is a domain)
 Add the certificate step (certbot / Let's Encrypt, as in MDM): port 443, a redirect from 80, `SERVER_DOMAIN` in

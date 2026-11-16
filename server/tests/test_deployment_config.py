@@ -61,7 +61,7 @@ def test_make_prod_up_starts_the_standup_scheduler_with_the_apis_image_and_the_s
     for setting in ("STANDUP_SYNC_SCHEDULE", "STANDUP_DB_URL", "LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY"):
         assert f"{setting}: ${{{setting}:-}}" in scheduler, f"the scheduler is not given {setting}"
     assert "SLACK_" not in scheduler  # it never posts to Slack
-    assert "/opt/standup-bot:ro" in scheduler  # the standup database, read only
+    assert "/opt/standup-snapshot:ro" in scheduler  # the copy of the standup database, read only
 
 
 def test_make_prod_up_starts_the_slack_listener_with_the_apis_image_and_its_own_tokens():
@@ -76,9 +76,11 @@ def test_make_prod_up_starts_the_slack_listener_with_the_apis_image_and_its_own_
     assert re.search(r"^prod-up: .*\n\tdocker compose up -d --build --wait", (ROOT / "Makefile").read_text(), re.M)
 
 
-def test_the_standup_database_folder_is_mounted_read_only_and_the_new_settings_reach_the_api():
+def test_the_standup_database_copy_is_mounted_read_only_and_the_new_settings_reach_the_api():
     server = _service("server")
-    assert re.search(r"- \$\{STANDUP_DB_DIR:-/opt/standup-bot\}:/opt/standup-bot:ro", server)  # read only, same path inside
+    # The host folder comes from STANDUP_DB_DIR; the path inside is fixed so STANDUP_DB_URL is the same everywhere.
+    assert re.search(r"- \$\{STANDUP_DB_DIR:-\./standup-snapshot\}:/opt/standup-snapshot:ro", server)
+    assert "/opt/standup-bot" not in (ROOT / "docker-compose.yml").read_text()  # the live standup folder (with its .env) is never mounted
     for name in ("STANDUP_DB_URL", "LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL", "SLACK_BOT_TOKEN"):
         assert re.search(rf"^\s+{name}: \$\{{{name}:-\}}", server, re.M), f"{name} does not reach the API container"
 

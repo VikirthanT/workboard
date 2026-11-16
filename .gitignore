@@ -8,6 +8,8 @@ seed/people.json
 seed/demo-standup.db
 # Database dumps from make prod-backup (real data)
 backups/
+# The standup app's database, copied by make prod-standup-snapshot (real standup text)
+standup-snapshot/
 __pycache__/
 .venv/
 .pytest_cache/

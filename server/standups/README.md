@@ -66,4 +66,4 @@ standups/
 └── standup_db/reader.py       read-only reader of the standup app's database (channels, submissions)
 ```
 
-Settings (`core/config.py`, all from the environment): `STANDUP_DB_URL`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`; see `.env.example`. Tables: `task_suggestions`, `standup_reads` (`models/suggestions.py`).
+In production `STANDUP_DB_URL` points at a copy of the standup database (the live file is in WAL mode, which the API's read only mount cannot open), kept fresh by `make prod-standup-snapshot` (`scripts/standup_snapshot.py`; `docs/DEPLOYMENT.md`, "The standup database copy"). Settings (`core/config.py`, all from the environment): `STANDUP_DB_URL`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_BASE_URL`; see `.env.example`. Tables: `task_suggestions`, `standup_reads` (`models/suggestions.py`).

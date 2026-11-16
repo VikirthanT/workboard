@@ -52,10 +52,10 @@ services:
       # app token belongs to the `slack` service below.
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
     volumes:
-      # The standup app's database folder, read only, at the same path inside as on the host so STANDUP_DB_URL is the same
-      # everywhere (sqlite:////opt/standup-bot/standup.db). The folder, not the file, so SQLite can see its journal files.
-      # The container's user (uid 10001) must be able to read it.
-      - ${STANDUP_DB_DIR:-/opt/standup-bot}:/opt/standup-bot:ro
+      # A copy of the standup app's database, read only (sqlite:////opt/standup-snapshot/standup.db). A copy because the
+      # live file is in WAL mode, which a read only mount cannot open; `make prod-standup-snapshot` keeps it fresh. The
+      # folder, not the file, because the copy is replaced by renaming. The container's user (uid 10001) must be able to read it.
+      - ${STANDUP_DB_DIR:-./standup-snapshot}:/opt/standup-snapshot:ro
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     # Healthy once the migrations are applied and the API answers; `make prod-up` waits for it before loading people.
@@ -110,7 +110,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
     volumes:
-      - ${STANDUP_DB_DIR:-/opt/standup-bot}:/opt/standup-bot:ro
+      - ${STANDUP_DB_DIR:-./standup-snapshot}:/opt/standup-snapshot:ro
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     depends_on:

@@ -15,7 +15,7 @@ DEV_COMPOSE = docker compose -f docker-compose.dev.yml
 
 .PHONY: help install dev web-dev db-logs dev-down build typecheck test client-test clean \
         server-install db-up db-down db-migrate db-sync-people db-demo db-demo-standup db-demo-reset db-demo-remove api-dev slack-dev scheduler-dev server-test server-cov e2e \
-        prod-up prod-backup prod-sync-people prod-down prod-logs
+        prod-up prod-backup prod-sync-people prod-standup-snapshot prod-down prod-logs
 
 help:
 	@echo "make install    install frontend dependencies"
@@ -41,6 +41,7 @@ help:
 	@echo "make prod-up    build and start the stack (database, API, Slack listener, standup scheduler, weekly people sync, frontend, nginx; migrations run on start), then sync the people from Slack once"
 	@echo "make slack-dev  run the Slack listener (DM buttons) beside make api-dev; make dev starts it too"
 	@echo "make prod-sync-people  just the people sync from Slack, once, against the running prod stack"
+	@echo "make prod-standup-snapshot  copy the standup app's database to standup-snapshot/ (the API reads that copy); run once before the first prod-up, then from cron"
 	@echo "make prod-down  stop it (data kept)"
 	@echo "make prod-logs  follow the logs"
 	@echo ""
@@ -174,6 +175,16 @@ prod-backup:
 # that deactivates many people. Without SLACK_BOT_TOKEN it says so and does nothing.
 prod-sync-people:
 	@$(LOAD_ENV) docker compose run --rm -T -e BOOTSTRAP_ADMIN_EMAILS server python -m identity.directory_scheduler --once $(ARGS)
+
+# The standup app keeps its database in WAL mode, which the API container cannot open from a read only mount. This copies
+# it to a plain file in STANDUP_SNAPSHOT_DIR, which the API mounts instead (scripts/standup_snapshot.py; the live file is
+# only read). Run it as the user that owns the standup database, once before the first prod-up and then from cron.
+# Other places: `make prod-standup-snapshot STANDUP_SOURCE=/path/standup.db STANDUP_SNAPSHOT_DIR=/path/folder` (this
+# target does not read .env; if STANDUP_DB_DIR is changed there, change STANDUP_SNAPSHOT_DIR to match).
+STANDUP_SOURCE ?= /opt/standup-bot/standup.db
+STANDUP_SNAPSHOT_DIR ?= standup-snapshot
+prod-standup-snapshot:
+	@python3 scripts/standup_snapshot.py $(STANDUP_SOURCE) $(STANDUP_SNAPSHOT_DIR)
 
 prod-down:
 	docker compose down
