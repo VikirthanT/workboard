@@ -16,7 +16,7 @@ from core.config import settings
 from tests.conftest import BASE_URL
 
 SCRATCH = "workboard_migration_test"
-TABLES = {"people", "teams", "access_audit_log", "tasks", "task_activity", "login_codes"}
+TABLES = {"people", "teams", "access_audit_log", "tasks", "task_activity", "login_codes", "task_suggestions", "standup_reads", "slack_outbox", "slack_dms", "slack_dm_messages"}
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 

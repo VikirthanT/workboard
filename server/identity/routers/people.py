@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from database.config import get_db
 from identity import schemas
 from identity.states import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
-from identity.services import admin_access, audit, directory
+from identity.services import admin_access, audit, directory, directory_sync
 from identity.services.lookup import get_person
 from models import Person
+from security import rate_limit
 from security.authentication import get_current_person
 
 router = APIRouter(tags=["people"])
@@ -55,6 +56,31 @@ def list_people(
     people, total = directory.search_people(db, unassigned=unassigned, admins=admins, q=q, limit=limit, offset=offset)
     return schemas.Page(
         items=[schemas.PersonResponse.model_validate(p) for p in people], total=total, limit=limit, offset=offset
+    )
+
+
+@router.post("/people/sync", response_model=schemas.DirectorySyncResponse)
+def sync_people(
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
+    """Refresh the people directory from the Slack workspace now: the same run the server makes every week, started by an admin.
+
+    People in Slack are added (or refreshed, or marked active again); people who have left are marked inactive, never
+    deleted; admins and every person's team and role are left alone; the BOOTSTRAP_ADMIN_EMAILS people are made admin. A run that
+    would deactivate more than 20 people or 10% of the directory is refused. The run is written to the audit log under the
+    admin's name. Returns what it did.
+
+    Who: admins only (403 `forbidden`). At most 3 a minute (429 `rate_limited`).
+    Errors: 501 `slack_not_configured`; 502 `slack_failed` (Slack unreachable) or `directory_empty` (nobody usable in its
+    answer); 409 `directory_removal_too_large` (forced only from the command line, `make prod-sync-people ARGS=--allow-large-removal`).
+    """
+    rate_limit.check(("directory-sync", actor.id), rate_limit.DIRECTORY_SYNC_PER_MINUTE, 60)
+    directory_sync.sync_from_slack(db, actor)
+    details = directory_sync.last_run(db).details
+    return schemas.DirectorySyncResponse(
+        people=details["people"], added=details["added"], reactivated=details["reactivated"], deactivated=details["deactivated"],
+        deactivated_on_a_team=details["deactivated_on_a_team"], new_admins=len(details["new_admins"]), skipped=details["skipped"],
     )
 
 

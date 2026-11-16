@@ -29,6 +29,32 @@ class Settings(BaseSettings):
     secret_key: str = ""
     token_ttl_seconds: int = 28800
 
+    # Suggestions (tasks proposed from standups). STANDUP_DB_URL points at the standup app's database, which we only
+    # ever read (e.g. sqlite:////opt/standup-bot/standup.db); empty means Suggestions is off. LLM_PROVIDER picks the
+    # model host (groq | anthropic | openai_compatible), LLM_MODEL the model, LLM_BASE_URL is only for openai_compatible
+    # (e.g. a local Ollama). All of them come from .env, none has a default choice, and the key is never logged.
+    standup_db_url: str = ""
+    # When the standups are read on their own, e.g. "mon 11:00, mon 15:00, tue 11:00" (see standups/scheduler.py): local
+    # (India) time; a day is mon..sun, weekdays or daily, and a time on its own means every day. Empty means never
+    # automatically, only when a manager presses Sync.
+    standup_sync_schedule: str = ""
+    # When the people directory is refreshed from the Slack workspace, same format (see identity/directory_scheduler.py), for
+    # example "sun 22:00". Empty means never automatically (`make prod-sync-people` runs it once).
+    directory_sync_schedule: str = ""
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_api_key: str = ""
+    llm_base_url: str = ""
+
+    # Slack app (docs/SLACK_SETUP.md). The bot token (xoxb-) posts and uploads; the app token (xapp-) is for the DMs'
+    # Socket Mode connection, not used yet. Both come from .env; with no bot token nothing is queued or sent.
+    slack_bot_token: str = ""
+    slack_app_token: str = ""
+
+    @property
+    def slack_configured(self) -> bool:
+        return self.slack_bot_token.startswith("xoxb-")
+
     @property
     def google_configured(self) -> bool:
         """True only when everything Google sign-in needs is set, so half a set-up never looks like a working one."""

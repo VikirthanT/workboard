@@ -4,6 +4,7 @@ export * from './tasks';
 export * from './imports';
 export * from './admin';
 export * from './teams';
+export * from './standups';
 export * from './reports';
 export * from './session';
 export { errorCode, errorMessage, UNAUTHORIZED_EVENT } from './axiosInstance';

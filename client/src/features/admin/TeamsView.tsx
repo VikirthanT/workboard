@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, UsersThree } from '@phosphor-icons/react';
+import { useRef, useState } from 'react';
+import { ArrowsClockwise, Plus, UsersThree } from '@phosphor-icons/react';
 import { PageLoading } from '../../app/components/PageLoading';
 import { Alert } from '../../app/components/ui/alert';
 import { Button } from '../../app/components/ui/button';
@@ -9,14 +9,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../app/components/u
 import type { PersonRecord, TeamRecord } from '../../app/types/types';
 import { useCurrentUser } from '../../hooks';
 import { errorMessage } from '../../services/api';
-import { AddMemberDialog, filterMembers, PeopleFilters, PeopleHeader, TeamSection, type RoleFilter } from '../team';
+import { useToast } from '../../app/components/ui/toast';
+import { AddMemberDialog, filterMembers, PeopleFilters, PeopleHeader, PullFromSlackDialog, TeamSection, type RoleFilter } from '../team';
 import { RemoveMemberDialog } from '../team/RemoveMemberDialog';
 import { AdminsPanel } from './AdminsPanel';
 import { AuditLog } from './AuditLog';
 import { CreateTeamDialog } from './CreateTeamDialog';
 import { DeleteTeamDialog } from './DeleteTeamDialog';
+import { EditStandupChannelDialog } from './EditStandupChannelDialog';
 import { AdminToggleDialog, ManagerChangeDialog } from './PersonDialogs';
-import { useAllTeamMembers, useTeams } from './hooks';
+import { useAllTeamMembers, useStandupChannels, useSyncPeople, useTeams } from './hooks';
 
 /**
  * The admin's portal: every team as a collapsible group with its people, a search box and role filter, a Manager /
@@ -28,12 +30,33 @@ export function TeamsView() {
   const teams = useTeams(!!me?.isAdmin);
   const list = teams.data ?? [];
   const memberQueries = useAllTeamMembers(list);
+  const channelNames = new Map((useStandupChannels(!!me?.isAdmin).data ?? []).map((c) => [c.id, c.name]));
 
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<RoleFilter>('all');
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState<TeamRecord | null>(null);
+  const [pulling, setPulling] = useState<TeamRecord | null>(null);
+  const { toast } = useToast();
+  const syncPeople = useSyncPeople();
+  // A ref, not `isPending`: a second click in the same frame still sees the old state, and each run counts against 3 a minute.
+  const syncing = useRef(false);
+
+  /** The people sync, then a line saying what it did; the server's own words when it could not (no Slack, too many removals). */
+  function runSyncPeople() {
+    if (syncing.current) return;
+    syncing.current = true;
+    syncPeople.mutate(undefined, {
+      onSettled: () => { syncing.current = false; },
+      onSuccess: (r) => {
+        const parts = [`${r.people} people in Slack`, `${r.added} added`, ...(r.reactivated ? [`${r.reactivated} back`] : []), `${r.deactivated} deactivated`];
+        toast(`Synced from Slack: ${parts.join(', ')}.${r.deactivatedOnATeam ? ` ${r.deactivatedOnATeam} of the deactivated were on a team: their open tasks need a new owner.` : ''}`, 'success');
+      },
+      onError: (e) => toast(errorMessage(e), 'warning'),
+    });
+  }
   const [deleting, setDeleting] = useState<TeamRecord | null>(null);
+  const [editingChannel, setEditingChannel] = useState<TeamRecord | null>(null);
   const [removing, setRemoving] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
   const [promoting, setPromoting] = useState<{ team: TeamRecord; person: PersonRecord } | null>(null);
   const [adminChange, setAdminChange] = useState<{ person: PersonRecord; isAdmin: boolean } | null>(null);
@@ -62,7 +85,12 @@ export function TeamsView() {
             {teams.data ? `${list.length} ${list.length === 1 ? 'team' : 'teams'}, ${people} ${people === 1 ? 'person' : 'people'}` : ''}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}><Plus size={14} aria-hidden />Create team</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" disabled={syncPeople.isPending} onClick={runSyncPeople}>
+            <ArrowsClockwise size={14} aria-hidden />{syncPeople.isPending ? 'Syncing people…' : 'Sync people from Slack'}
+          </Button>
+          <Button onClick={() => setCreating(true)}><Plus size={14} aria-hidden />Create team</Button>
+        </div>
       </div>
 
       <Tabs defaultValue="teams">
@@ -93,7 +121,10 @@ export function TeamsView() {
                   members={shown}
                   totalMembers={all.length}
                   onAdd={() => setAdding(team)}
+                  onPullFromSlack={() => setPulling(team)}
                   onDeleteTeam={() => setDeleting(team)}
+                  onEditChannel={() => setEditingChannel(team)}
+                  channelName={team.standupChannelId ? channelNames.get(team.standupChannelId) : undefined}
                   onRemove={(person) => setRemoving({ team, person })}
                   onMakeManager={(person) => setPromoting({ team, person })}
                   onToggleAdmin={(person, isAdmin) => setAdminChange({ person, isAdmin })}
@@ -112,7 +143,16 @@ export function TeamsView() {
 
       <CreateTeamDialog open={creating} onClose={() => setCreating(false)} />
       <DeleteTeamDialog team={deleting} onClose={() => setDeleting(null)} />
+      <EditStandupChannelDialog team={editingChannel} onClose={() => setEditingChannel(null)} />
       {adding && <AddMemberDialog open teamId={adding.id} teamName={adding.name} reasonOptional onClose={() => setAdding(null)} />}
+      <PullFromSlackDialog
+        team={pulling}
+        reasonOptional
+        onClose={(added) => {
+          if (added && pulling) toast(`${added} ${added === 1 ? 'person' : 'people'} added to ${pulling.name}.`, 'success');
+          setPulling(null);
+        }}
+      />
       {removing && <RemoveMemberDialog team={removing.team} person={removing.person} reasonOptional={false} onClose={() => setRemoving(null)} />}
       {promoting && <ManagerChangeDialog team={promoting.team} person={promoting.person} onClose={() => setPromoting(null)} />}
       {adminChange && <AdminToggleDialog person={adminChange.person} isAdmin={adminChange.isAdmin} onClose={() => setAdminChange(null)} />}

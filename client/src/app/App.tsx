@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { TeamsView } from '../features/admin';
 import { LoginPage } from '../features/auth';
 import { BoardView } from '../features/board';
+import { SuggestionsView } from '../features/suggestions';
 import { TeamView } from '../features/team';
 import { AppShell } from './components/AppShell';
 
@@ -16,6 +17,7 @@ export function App() {
         <Route path="boards" element={<BoardView adminView />} />
         <Route path="boards/:team" element={<BoardView adminView />} />
         <Route path="team" element={<TeamView />} />
+        <Route path="suggestions" element={<SuggestionsView />} />
         <Route path="admin" element={<TeamsView />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -81,6 +81,16 @@ def get_activity(db: Session, actor: Person, entry_id: uuid.UUID) -> schemas.Act
 
 # ---- the board ----
 
+def _matches_search(task: Task, search: str) -> bool:
+    """The board's search box: part of the title (any case), or the task number with or without the `#` ("#33", "33").
+    An empty search matches every task."""
+    text = search.strip().lower()
+    if not text:
+        return True
+    digits = text.removeprefix("#")
+    return text in task.title.lower() or (digits.isdigit() and int(digits) == task.number)
+
+
 def get_board(
     db: Session,
     actor: Person,
@@ -91,12 +101,13 @@ def get_board(
     attention: bool = False,
     limit: int | None = None,
     show: list[str] | None = None,
+    search: str = "",
     today: date | None = None,
 ) -> schemas.Board:
     """`team` comes from resolve_board_team, which has already checked the actor may read it.
 
     `limit` caps the cards sent per column (None sends them all); `show` raises it for single columns,
-    as `status:count` ("todo:15"), for "Load more". Columns come sorted: open ones most urgent first, Done newest first.
+    as `status:count` ("todo:15"), for "Load more". Every column comes sorted by when its cards last changed, newest first.
     """
     filters = filters or []
     unknown = [f for f in filters if f not in FILTERS]
@@ -105,7 +116,7 @@ def get_board(
     per_column = _parse_show(show or [])
     today = today or _today()
 
-    # Open cards in the order they were made; Done cards stay on the board, the most recently closed first.
+    # Open cards in the order they were made, then the Done ones (which stay on the board); `_by_recency` re-orders them all.
     visible = list(db.scalars(select(Task).where(Task.team_id == team.id, Task.status != "done").order_by(Task.created_at, Task.id)))
     visible += db.scalars(
         select(Task).where(Task.team_id == team.id, Task.status == "done").order_by(Task.closed_at.desc(), Task.id)
@@ -115,7 +126,7 @@ def get_board(
     def assignee(task: Task) -> Person | None:
         return context.people.get(task.assignee_id)  # None when unassigned
 
-    scoped = [t for t in visible if person_id is None or t.assignee_id == person_id]
+    scoped = [t for t in visible if (person_id is None or t.assignee_id == person_id) and _matches_search(t, search)]
     attention_tasks = [t for t in scoped if rules.needs_attention(t, assignee(t), today)]
     in_view = attention_tasks if attention else scoped
     matches = {
@@ -124,7 +135,7 @@ def get_board(
         "blocked": lambda t: t.status == "blocked",
         "needs_review": lambda t: t.status == "review",
     }
-    shown = _by_urgency([t for t in in_view if all(matches[f](t) for f in filters)], today)
+    shown = _by_recency([t for t in in_view if all(matches[f](t) for f in filters)])
     column_totals = {s: sum(t.status == s for t in shown) for s in STATUSES}
     if limit is not None:
         sent = dict.fromkeys(STATUSES, 0)
@@ -158,12 +169,11 @@ def get_board(
     )
 
 
-def _by_urgency(tasks: list[Task], today: date) -> list[Task]:
-    """Open cards: overdue first, then soonest due (no date last), then most recently changed. Done keeps its
-    order (most recently closed first). Two stable sorts: the second decides, the first breaks its ties."""
-    open_ = sorted((t for t in tasks if t.status != "done"), key=lambda t: t.updated_at, reverse=True)
-    open_.sort(key=lambda t: (not rules.is_overdue(t, today), t.due_at or date.max))
-    return open_ + [t for t in tasks if t.status == "done"]
+def _by_recency(tasks: list[Task]) -> list[Task]:
+    """Most recently changed first, in every column (a move, an edit, a reassignment or a comment all count). The list
+    holds all columns together; the client splits it by status and keeps this order inside each. Cards changed at the
+    same moment keep the order they came in."""
+    return sorted(tasks, key=lambda t: t.updated_at, reverse=True)
 
 
 def _parse_show(show: list[str]) -> dict[str, int]:
@@ -235,6 +245,7 @@ def _task_response(task: Task, team: Team, actor: Person, context: _Context, tod
     assignee = context.people.get(task.assignee_id)
     return schemas.TaskResponse(
         id=task.id,
+        number=task.number,
         team_id=task.team_id,
         title=task.title,
         description=task.description,

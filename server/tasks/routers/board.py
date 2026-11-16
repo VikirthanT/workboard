@@ -27,6 +27,7 @@ def board(
     attention: bool = False,
     limit: int | None = Query(default=None, ge=1, le=queries.MAX_COLUMN_CARDS),
     show: str = Query(default="", description="Comma-separated status:count, e.g. todo:10,done:15"),
+    q: str = Query(default="", max_length=100, description="Search: part of a title, or a task number (33 or #33)"),
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
@@ -40,15 +41,17 @@ def board(
       person     keep only this person's cards
       filter     comma list of needs_review, overdue, blocked, due_week; a card must match all of them
                  (an unknown name is 422 `unknown_filter`)
+      q          search: keeps cards whose title contains the text (any case) or whose number is the one typed (`33` or `#33`);
+                 the stats, counts and column totals follow it
       attention  true keeps only what needs the manager: overdue, blocked, in Review, or without an owner
       limit      the most cards sent per column (all when left out); `column_totals` gives each column's full count
       show       comma list of status:count raising `limit` for single columns ("Load more"); a bad one is 422 `invalid_show`
-    Open columns come most urgent first (overdue, then soonest due, then most recently changed).
-    Done cards never leave the board: the Done column lists the most recently closed first.
+    Every column comes with the most recently changed card first (a move, an edit, a reassignment or a comment counts).
+    Done cards never leave the board: they stay in the Done column, ordered the same way.
     `filter_counts` says how many cards each filter would show right now, so the menu can show it before you pick.
     """
     chosen = queries.resolve_board_team(db, actor, team)
     return queries.get_board(
         db, actor, chosen, person_id=person, filters=[f for f in filter_.split(",") if f], attention=attention,
-        limit=limit, show=[s for s in show.split(",") if s],
+        limit=limit, show=[s for s in show.split(",") if s], search=q,
     )

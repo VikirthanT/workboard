@@ -2,7 +2,7 @@
 from typing import NamedTuple
 
 from core.exceptions import AppError
-from models import ROLE_MANAGER, Person, Team
+from models import ROLE_MANAGER, Person, Task, Team
 
 
 def is_admin(person: Person) -> bool:
@@ -74,9 +74,20 @@ def can_act(actor: Person, team: Team) -> bool:
     return team.manager_id == actor.id
 
 
+def can_sync_standups(actor: Person, team: Team) -> bool:
+    """Read a team's standup channel and propose suggestions: the team's manager, or any admin (to check the connection or
+    to look before the manager does). It only stores suggestions for the manager to review; it never creates a task."""
+    return is_admin(actor) or team.manager_id == actor.id
+
+
 def require_view_team(actor: Person, team: Team) -> None:
     if not can_view_team(actor, team):
         raise AppError("forbidden", "You can only see your own team's board.", 403)
+
+
+def require_sync_standups(actor: Person, team: Team) -> None:
+    if not can_sync_standups(actor, team):
+        raise AppError("forbidden", "Only the team's manager or an admin can sync its standups.", 403)
 
 
 def require_act(actor: Person, team: Team) -> None:
@@ -101,3 +112,37 @@ def transitions_for(actor: Person, team: Team, status: str) -> list[Transition]:
 
 def transition_to(actor: Person, team: Team, status: str, to: str) -> Transition | None:
     return next((t for t in transitions_for(actor, team, status) if t.to == to), None)
+
+
+# ---- the assignee's own moves, from Slack. Assignees never sign in; this is all they may do, and only to their own task ----
+
+# The statuses an assignee may set on their own task, in the order the Slack dropdown lists them. They may move freely
+# between these, backwards included (To Do, In Progress, Blocked, Review), and never to Done: the manager decides that. A
+# task that is Done is locked: from Done they can move it nowhere (only the manager reopens it).
+ASSIGNEE_STATUSES = ("todo", "in_progress", "blocked", "review")
+# Going to Blocked, or back to To Do, needs a reason, as on the board.
+ASSIGNEE_REASON_STATUSES = ("blocked", "todo")
+
+
+def is_assignee(actor: Person, task: Task) -> bool:
+    return actor.active and task.assignee_id is not None and task.assignee_id == actor.id
+
+
+def can_assignee_comment(actor: Person, task: Task) -> bool:
+    """The person a task is assigned to may comment on it until it is Done, as the manager may."""
+    return is_assignee(actor, task) and task.status != "done"
+
+
+def assignee_transitions_for(actor: Person, task: Task) -> list[Transition]:
+    """The statuses the person a task is assigned to may move it to, from where it is now: every other status in
+    ASSIGNEE_STATUSES, none from Done. A move the board also has keeps the board's label; a reason is needed for Blocked and
+    for going back to To Do."""
+    if not is_assignee(actor, task) or task.status not in ASSIGNEE_STATUSES:
+        return []
+    moves = []
+    for to in ASSIGNEE_STATUSES:
+        if to == task.status:
+            continue
+        kind, label, _ = _TRANSITIONS.get(task.status, {}).get(to, ("move", f"Move to {to.replace('_', ' ')}", False))
+        moves.append(Transition(to, kind, label, to in ASSIGNEE_REASON_STATUSES))
+    return moves

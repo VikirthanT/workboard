@@ -20,6 +20,9 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    # A short id people can say aloud, shown as #<number> in the Workboard and in Slack: one counter for every task. From a database sequence, so it
+    # is never reused, even after a task is deleted.
+    number: Mapped[int] = mapped_column(Integer, server_default=text("nextval('tasks_number_seq')"), unique=True)
     # Deleting a team erases its tasks (and, through them, their activity).
     team_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String)

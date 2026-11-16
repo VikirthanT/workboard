@@ -27,6 +27,12 @@ export function formatDue(iso: string | null, done: boolean): string {
   return `${-n}d overdue`;
 }
 
+/** "Overdue by 1 day", "Overdue by 3 days". */
+export function formatOverdue(iso: string): string {
+  const n = Math.max(1, -diffDays(todayISO(), iso));
+  return `Overdue by ${n} ${n === 1 ? 'day' : 'days'}`;
+}
+
 export function formatDateTime(ts: string): string {
   const d = new Date(ts);
   const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });

@@ -11,7 +11,7 @@ beforeEach(() => sessionStorage.clear());
 describe('useBoardParams', () => {
   it('starts empty', () => {
     const { result } = renderHook(() => useBoardParams(), { wrapper: at('/') });
-    expect(result.current.query).toEqual({ teamId: null, attention: false, personId: null, filters: [] });
+    expect(result.current.query).toEqual({ teamId: null, attention: false, personId: null, filters: [], search: '' });
     expect(result.current.taskId).toBeNull();
   });
 
@@ -26,6 +26,18 @@ describe('useBoardParams', () => {
     const again = renderHook(() => useBoardParams(), { wrapper: at('/') });
     expect(again.result.current.query).toMatchObject({ attention: true, personId: 'p1' });
     expect(again.result.current.taskId).toBe('t1');
+  });
+
+  it('keeps the search with the view, and clearing it empties the query', () => {
+    const first = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    act(() => first.result.current.setSearch('#33'));
+    expect(first.result.current.query.search).toBe('#33');
+    first.unmount();
+
+    const again = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    expect(again.result.current.query.search).toBe('#33');
+    act(() => again.result.current.setSearch(''));
+    expect(again.result.current.query.search).toBe('');
   });
 
   it('keeps each team its own view', () => {
@@ -47,9 +59,19 @@ describe('useBoardParams', () => {
     expect(result.current.query.filters).toEqual([]);
   });
 
-  it('applies the header link /?filter=needs_review once', () => {
+  it('clears "Needs attention" with the other filters, since it is one of them', () => {
+    const { result } = renderHook(() => useBoardParams(), { wrapper: at('/') });
+    act(() => { result.current.setAttention(true); result.current.toggleFilter('blocked'); });
+    expect(result.current.query).toMatchObject({ attention: true, filters: ['blocked'] });
+
+    act(() => result.current.clearFilters());
+
+    expect(result.current.query).toMatchObject({ attention: false, filters: [] });
+  });
+
+  it('takes no filter from the URL: the header link that did is gone and the filters live in the Filters menu', () => {
     const { result } = renderHook(() => useBoardParams(), { wrapper: at('/?filter=needs_review') });
-    expect(result.current.query.filters).toEqual(['needs_review']);
+    expect(result.current.query.filters).toEqual([]);
   });
 
   it('ignores junk in storage and unknown filters', () => {

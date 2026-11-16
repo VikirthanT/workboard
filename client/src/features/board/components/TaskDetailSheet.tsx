@@ -52,7 +52,7 @@ function CommentBox({ taskId }: { taskId: string }) {
       }}
     >
       <Label htmlFor="task-comment">Add a comment</Label>
-      <Textarea id="task-comment" value={text} onChange={(e) => setText(e.target.value)} placeholder="Share an update or ask a question" maxLength={1000} />
+      <Textarea id="task-comment" value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
       <Button type="submit" variant="outline" size="sm" className="self-end" disabled={!text.trim() || add.isPending}>Comment</Button>
     </form>
   );
@@ -136,6 +136,8 @@ export function TaskDetailSheet({ taskId, me, readOnly = false, onClose, onEdit,
               <SheetTitle className="text-md font-semibold text-ink">{task.title}</SheetTitle>
               <SheetDescription asChild>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* The short id, shown only when a task is opened; the same one the Slack card carries. */}
+                  <span className="text-sm font-semibold tabular-nums text-ink-muted">Task #{task.number}</span>
                   <StatusChip status={task.status} />
                   {task.overdue && <Badge className="border-danger-border bg-danger-subtle text-danger-ink">Overdue</Badge>}
                   {task.dueSoon && <Badge className="border-warning-border bg-warning-subtle text-warning-ink">Due soon</Badge>}

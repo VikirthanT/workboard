@@ -5,6 +5,7 @@ export { TeamSection } from './TeamSection';
 export { PeopleFilters } from './PeopleFilters';
 export { PeopleHeader } from './PeopleHeader';
 export { AddMemberDialog } from './AddMemberDialog';
+export { PullFromSlackDialog } from './PullFromSlackDialog';
 export { ReasonFormDialog } from './ReasonFormDialog';
 export { filterMembers } from './memberFilter';
 export type { RoleFilter } from './memberFilter';

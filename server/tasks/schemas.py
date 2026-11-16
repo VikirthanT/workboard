@@ -86,6 +86,8 @@ class LatestReason(BaseModel):
 
 class TaskResponse(BaseModel):
     id: uuid.UUID
+    # The short id people can say aloud; shown as #<number> ("task #12"), the same in Slack. One counter for every task.
+    number: int
     team_id: uuid.UUID
     title: str
     description: str

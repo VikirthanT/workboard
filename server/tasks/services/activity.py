@@ -17,12 +17,14 @@ def record(
     old: str | None = None,
     new: str | None = None,
     note: str | None = None,
+    source: str = "workboard",
 ) -> None:
     db.add(
         TaskActivity(
             id=entry_id or uuid.uuid4(),
             task_id=task.id,
             actor_id=actor.id,
+            source=source,
             kind=kind,
             field=field,
             old_value=old,

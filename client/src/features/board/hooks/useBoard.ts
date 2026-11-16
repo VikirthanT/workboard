@@ -3,14 +3,18 @@ import { getBoardKey, getPeopleSearchKey, getTaskKey } from '../../../app/consta
 import type { BoardQuery, ColumnSizes } from '../../../app/types/types';
 import { getBoard, getTask, searchPeople } from '../../../services/api';
 
-/** Anyone active in the directory matching `q`, searched on the server; loaded only while the Support picker is open. */
+/**
+ * Anyone active in the directory matching `q`, searched on the server; loaded only while the Support picker is open. Each
+ * search is kept for the whole session; an admin's Sync people or a membership change refreshes them.
+ */
 export function usePeopleSearch(enabled: boolean, q: string) {
-  return useQuery({ queryKey: getPeopleSearchKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData });
+  return useQuery({ queryKey: getPeopleSearchKey(q), queryFn: () => searchPeople(q), enabled, placeholderData: keepPreviousData, staleTime: Infinity, gcTime: Infinity });
 }
 
-/** Five minutes: your own changes refresh it at once (the mutations invalidate it); someone else's show on the
- *  next tab focus, a browser reload (the cache is in memory), or at most five minutes later. Shorten when Slack changes cards (Phase 2). */
-const BOARD_FRESH_MS = 5 * 60 * 1000;
+/** Ten seconds: your own changes refresh it at once (the mutations invalidate it); a change made elsewhere, by Slack or by
+ *  another manager, shows within ten seconds while the tab is visible (a hidden tab does not poll), and at once on tab focus.
+ *  Polling, not a push: simple, and a handful of managers is a light load. */
+const BOARD_FRESH_MS = 10 * 1000;
 
 export function useBoard(query: BoardQuery, sizes: ColumnSizes) {
   return useQuery({
@@ -22,6 +26,8 @@ export function useBoard(query: BoardQuery, sizes: ColumnSizes) {
   });
 }
 
+/** The open task and its timeline and comments: refetched every ten seconds while it is open, so a comment or a status
+ *  change made in Slack appears without reloading. */
 export function useTask(id: string | null) {
-  return useQuery({ queryKey: getTaskKey(id ?? ''), queryFn: () => getTask(id!), enabled: !!id });
+  return useQuery({ queryKey: getTaskKey(id ?? ''), queryFn: () => getTask(id!), enabled: !!id, refetchInterval: BOARD_FRESH_MS });
 }

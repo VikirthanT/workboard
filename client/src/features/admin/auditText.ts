@@ -18,6 +18,11 @@ export function describeAudit(e: AuditEntry): string {
     case 'member.remove': return `Removed ${person} from ${team}`;
     case 'admin.grant': return `Made ${person} an admin`;
     case 'admin.revoke': return `Revoked admin from ${person}`;
+    case 'directory.sync': {
+      const n = (key: string): number => (typeof e.details?.[key] === 'number' ? (e.details[key] as number) : 0);
+      const back = n('reactivated') ? `, ${n('reactivated')} back` : '';
+      return `Synced the people from Slack: ${n('added')} added${back}, ${n('deactivated')} deactivated`;
+    }
     case 'auth.login': return 'Signed in'; // the Who column already names the person
     case 'auth.login_failed': return `Sign-in refused for ${detail(e, 'email', 'someone')}`;
     case 'task.delete': {

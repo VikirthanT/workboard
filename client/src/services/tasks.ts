@@ -10,6 +10,7 @@ export async function getBoard(q: BoardQuery, sizes: ColumnSizes = {}): Promise<
       attention: q.attention || undefined,
       person: q.personId ?? undefined,
       filter: q.filters.join(',') || undefined,
+      q: q.search.trim() || undefined,
       limit: BOARD_PAGE,
       show: Object.entries(sizes).map(([status, n]) => `${status}:${n}`).join(',') || undefined,
     },

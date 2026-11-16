@@ -11,21 +11,28 @@ back as {"detail": {"code", "message"}}; the codes are listed in `tasks/README.m
 """
 import uuid
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from database.config import get_db
 from models import Person
 from security.authentication import get_current_person
+from slack.services import announce, dm
 from tasks import schemas
-from tasks.services import commands, queries
+from tasks.services import commands, lookup, queries
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.post("", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(body: schemas.TaskCreate, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
-    """Create a task on the caller's own team. It starts in To Do.
+def create_task(
+    body: schemas.TaskCreate,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
+    """Create a task on the caller's own team. It starts in To Do. When Slack is set up it is then announced in the
+    team's standup channel (after this reply, so a Slack problem never affects it).
 
     Who: the manager of a team (an admin on no team has nowhere to put it: 403 `forbidden`).
     Body: {title, assignee_id, description?, priority? (low | medium | high, default medium), due_at? (a date)}.
@@ -38,11 +45,16 @@ def create_task(body: schemas.TaskCreate, db: Session = Depends(get_db), actor: 
         db, actor, task_id, body.title, body.description, body.priority, body.due_at, body.assignee_id,
         support_id=body.support_id, project=body.project, stage=body.stage, start_at=body.start_at,
     )
+    background.add_task(announce.flush_team, actor.team_id)  # sends the assignee's DM card; the channel post only if queued
     return queries.get_task(db, actor, task_id)
 
 
 @router.get("/{task_id}", response_model=schemas.TaskDetail)
-def task_detail(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def task_detail(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """One task with its full timeline (oldest first): creation, status moves, edits, reassignments, comments.
 
     Who: the manager of the task's team, or any admin (read-only). Anyone else gets 403 `forbidden`.
@@ -55,31 +67,49 @@ def task_detail(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person
 def update_task(
     task_id: uuid.UUID,
     body: schemas.TaskUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
-    """Change a task's title, description, priority, due date or assignee.
+    """Change a task's title, description, priority, due date or assignee. The assignee's Slack DM card is redrawn after.
 
     Who: the manager of the task's team.
     Body: send only what changes. A field you leave out stays as it is; `due_at: null` clears the date; a null
     title, priority, description or assignee is ignored. Status is not editable here: use `/status`.
-    Each field that really changed becomes one entry on the timeline (a new assignee is a "reassign" entry).
+    Each field that really changed becomes one entry on the timeline (a new assignee is a "reassign" entry). When Slack is set
+    up, a new assignee also gets a DM card with the task's earlier comments and moves under it, and the old assignee's card is
+    closed with a note of who has the task now.
     Errors: 409 `task_done` (a finished task cannot be reassigned, but can be edited), 422 `invalid_assignee`,
     422 `title_required`, 404 `task_not_found`.
     """
-    commands.update_task(db, actor, task_id, body.model_dump(exclude_unset=True))
+    changes = body.model_dump(exclude_unset=True)
+    was_with = lookup.get_task(db, task_id).assignee_id
+    commands.update_task(db, actor, task_id, changes)
+    if changes.get("assignee_id") not in (None, was_with):
+        # Someone new has it: their card (with what was already said, under it), the old card closed, both Home tabs redrawn.
+        background.add_task(dm.after_reassign, task_id, was_with)
+    else:
+        background.add_task(dm.refresh_card, task_id)
     return queries.get_task(db, actor, task_id)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person = Depends(get_current_person)):
+def delete_task(
+    task_id: uuid.UUID,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    actor: Person = Depends(get_current_person),
+):
     """Delete a task and its timeline for good.
 
     Who: the manager of the task's team.
     Only while the task is To Do or In Progress. Once it has been Blocked, in Review or Done it carries history
-    worth keeping, so it cannot be deleted (409 `not_deletable`). Returns 204 with no body.
+    worth keeping, so it cannot be deleted (409 `not_deletable`). Returns 204 with no body. When Slack is set up, the
+    task's DM card (and the replies under it) are then deleted from the assignee's Slack, and their Home tab redrawn.
     """
+    messages = dm.removal_plan(db, task_id)  # read first: the delete takes the Slack message ids with it
     commands.delete_task(db, actor, task_id)
+    background.add_task(dm.remove_after_delete, *messages)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -87,10 +117,12 @@ def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db), actor: Person
 def move_task(
     task_id: uuid.UUID,
     body: schemas.StatusMove,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
-    """Move a card to another column.
+    """Move a card to another column. The assignee's Slack DM card is redrawn after (new status, locked once Done), and a
+    move that came with a reason or remarks is posted in their DM thread.
 
     Who: the manager of the task's team.
     Body: {to, note?}. `to` is one of todo, in_progress, blocked, review, done. Only the moves the board allows
@@ -101,6 +133,8 @@ def move_task(
     Errors: 409 `invalid_transition`, 422 `reason_required`, 422 `completed_on_invalid`, 422 `completed_on_not_done`, 404 `task_not_found`.
     """
     commands.move_task(db, actor, task_id, body.to, body.note, body.completed_on)
+    background.add_task(dm.refresh_card, task_id)
+    background.add_task(dm.post_move, task_id, actor.id, body.to, body.note)  # the reason, in the assignee's DM thread
     return queries.get_task(db, actor, task_id)
 
 
@@ -108,10 +142,12 @@ def move_task(
 def add_comment(
     task_id: uuid.UUID,
     body: schemas.CommentCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Person = Depends(get_current_person),
 ):
-    """Add a comment to a task. It appears on the task's timeline with the author and the time.
+    """Add a comment to a task. It appears on the task's timeline with the author and the time, and (when Slack is set
+    up) in the assignee's DM thread under the task's card, after this reply.
 
     Who: the manager of the task's team.
     Body: {body} (1 to 1000 characters, trimmed). Not allowed on a Done task: reopen it first (409 `task_done`).
@@ -119,4 +155,5 @@ def add_comment(
     """
     entry_id = uuid.uuid4()
     commands.add_comment(db, actor, task_id, entry_id, body.body)
+    background.add_task(dm.post_manager_comment, task_id, entry_id)
     return queries.get_activity(db, actor, entry_id)

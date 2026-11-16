@@ -109,6 +109,25 @@ def test_filters_and_the_attention_tick_narrow_the_cards_and_say_how_many(direct
     assert everything["stats"]["overdue"] == 1 and ok and late
 
 
+def test_search_finds_a_task_by_part_of_its_title_or_by_its_number(directory, npi):
+    weld = create(directory, npi, title="Design Weld jig")
+    harness = create(directory, npi, title="Wire harness")
+    move(directory, npi, harness, "in_progress")
+
+    def titles(q):
+        return [t["title"] for t in board(directory, npi["asha"], q)["tasks"]]
+
+    assert titles("?q=weld") == ["Design Weld jig"]  # any case, any part of the title
+    assert titles("?q=%20WIRE%20") == ["Wire harness"]  # spaces around it are ignored
+    assert titles(f"?q={weld['number']}") == ["Design Weld jig"]  # the number, bare or with the #
+    assert titles(f"?q=%23{harness['number']}") == ["Wire harness"]
+    assert titles("?q=nothing") == []
+    assert len(titles("?q=")) == 2
+
+    found = board(directory, npi["asha"], "?q=weld")  # the totals and stats follow the search
+    assert found["column_totals"]["todo"] == 1 and found["column_totals"]["in_progress"] == 0 and found["stats"]["todo"] == 1
+
+
 def test_the_person_dropdown_and_an_unknown_filter(directory, npi):
     create(directory, npi, title="Ravi's")
     create(directory, npi, title="Asha's", assignee_id=str(npi["asha"].id))
@@ -119,32 +138,69 @@ def test_the_person_dropdown_and_an_unknown_filter(directory, npi):
     assert directory.call(npi["asha"], "GET", "/board?filter=nonsense").json()["detail"]["code"] == "unknown_filter"
 
 
-def test_done_cards_stay_on_the_board_the_most_recently_closed_first_after_the_open_ones(directory, db, npi):
+def test_done_cards_stay_on_the_board_and_are_ordered_like_every_other_column(directory, db, npi):
     first, second, open_card = create(directory, npi, title="First"), create(directory, npi, title="Second"), create(directory, npi, title="Open")
     for task in (first, second):
         move(directory, npi, task, "in_progress")
     move(directory, npi, second, "done", "shipped")
     move(directory, npi, first, "done", "shipped")
-    # Closed months ago: still on the board. Second was closed before First, so First stays on top.
+    # Closed months ago: still on the board.
     db.query(Task).filter(Task.title == "Second").update({"closed_at": datetime.now(timezone.utc) - timedelta(days=90)})
     db.commit()
 
     result = board(directory, npi["asha"])
 
-    assert [t["title"] for t in result["tasks"]] == ["Open", "First", "Second"]
+    done = [t["title"] for t in result["tasks"] if t["status"] == "done"]
+    assert done == ["First", "Second"]  # First was changed last: the order is by last change, like every other column
     assert result["stats"]["done"] == 2 and open_card
 
 
-def test_open_cards_come_overdue_first_then_soonest_due_then_undated(directory, db, npi):
+def titles(directory, npi, status=None, query=""):
+    return [t["title"] for t in board(directory, npi["asha"], query)["tasks"] if status is None or t["status"] == status]
+
+
+def test_every_column_lists_the_most_recently_changed_card_first_whatever_its_due_date(directory, db, npi):
     later = (date.today() + timedelta(days=40)).isoformat()
     create(directory, npi, title="Undated")
     create(directory, npi, title="Later", due_at=later)
     create(directory, npi, title="Soon", due_at=DUE)
-    create(directory, npi, title="Late", due_at=DUE)
-    db.query(Task).filter(Task.title == "Late").update({"due_at": date.today() - timedelta(days=1)})  # passed since it was set
+    late = create(directory, npi, title="Late", due_at=DUE)
+    # Overdue (it passed since it was set) and the one not touched for longest: set both explicitly.
+    db.query(Task).filter(Task.title == "Late").update({"due_at": date.today() - timedelta(days=1), "updated_at": datetime.now(timezone.utc) - timedelta(hours=1)})
     db.commit()
 
-    assert [t["title"] for t in board(directory, npi["asha"])["tasks"]] == ["Late", "Soon", "Later", "Undated"]
+    # Newest change first: an overdue card no longer jumps the queue, it waits its turn like any other.
+    assert titles(directory, npi) == ["Soon", "Later", "Undated", "Late"]
+    directory.call(npi["asha"], "PATCH", f"/tasks/{late['id']}", json={"priority": "high"})  # touching it brings it to the top
+    assert titles(directory, npi)[0] == "Late"
+    create(directory, npi, title="Newest")
+    assert titles(directory, npi, "todo")[0] == "Newest"
+
+
+def test_a_card_moves_to_the_top_of_its_column_when_it_is_edited_commented_on_or_moved(directory, db, npi):
+    a, b, c = (create(directory, npi, title=t) for t in ("A", "B", "C"))
+    assert titles(directory, npi, "todo") == ["C", "B", "A"]
+
+    directory.call(npi["asha"], "PATCH", f"/tasks/{a['id']}", json={"title": "A edited"})
+    assert titles(directory, npi, "todo") == ["A edited", "C", "B"]
+
+    assert directory.call(npi["asha"], "POST", f"/tasks/{b['id']}/comments", json={"body": "ping"}).status_code == 201
+    assert titles(directory, npi, "todo") == ["B", "A edited", "C"]
+
+    move(directory, npi, c, "in_progress")
+    move(directory, npi, a, "in_progress")
+    assert titles(directory, npi, "in_progress") == ["A edited", "C"]  # the one moved last is on top of the new column
+    assert titles(directory, npi, "todo") == ["B"]
+
+
+def test_the_cards_kept_by_a_column_limit_are_the_most_recently_changed(directory, npi):
+    created = [create(directory, npi, title=f"T{n}") for n in range(4)]
+    directory.call(npi["asha"], "PATCH", f"/tasks/{created[0]['id']}", json={"title": "T0 touched"})
+
+    result = board(directory, npi["asha"], "?limit=2")
+
+    assert [t["title"] for t in result["tasks"] if t["status"] == "todo"] == ["T0 touched", "T3"]  # the two newest changes, not the two oldest
+    assert result["column_totals"]["todo"] == 4
 
 
 def test_limit_caps_each_column_and_show_loads_more_of_one(directory, npi):

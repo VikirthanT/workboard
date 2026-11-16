@@ -38,6 +38,73 @@ export interface WireTeam {
   name: string;
   manager: WirePersonSummary | null;
   member_count: number;
+  standup_channel_id: string | null;
+}
+
+export interface WireSuggestion {
+  id: string;
+  person_id: string;
+  title: string;
+  description: string;
+  kind: string;
+  priority: string;
+  start_at: string | null;
+  due_at: string | null;
+  due_is_default: boolean;
+  subtasks: string[];
+  evidence_quote: string;
+  related_to: string | null;
+  state: string;
+  late_reply: boolean;
+  standup_date: string;
+  task_id: string | null;
+}
+
+export interface WireStandupPost {
+  date: string;
+  posted_at: string | null;
+  late_reply: boolean;
+  last_week: string | null;
+  this_week: string | null;
+  blockers: string | null;
+  message: string | null;
+}
+
+export interface WireSuggestionsPage {
+  standup_channel_id: string | null;
+  last_synced_at: string | null;
+  standup_problem: string | null;
+  people: {
+    person: { id: string; name: string; email: string; role: string };
+    standup: WireStandupPost | null;
+    suggestions: WireSuggestion[];
+  }[];
+}
+
+export interface WireDirectorySync {
+  people: number;
+  added: number;
+  reactivated: number;
+  deactivated: number;
+  deactivated_on_a_team: number;
+  new_admins: number;
+  skipped: number;
+}
+
+export interface WireStandupChannel {
+  slack_channel_id: string;
+  name: string;
+}
+
+export interface WireChannelName {
+  id: string;
+  name: string;
+}
+
+export interface WireChannelMembers {
+  channel_id: string;
+  members: { person: WireIdentity; state: string; team_name: string | null }[];
+  not_in_directory: number;
 }
 
 /** One page of a longer list (the server's `Page`). */
@@ -57,6 +124,7 @@ export interface WireTransition {
 
 export interface WireTask {
   id: string;
+  number: number;
   team_id: string;
   title: string;
   description: string;

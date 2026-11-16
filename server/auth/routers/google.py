@@ -107,7 +107,11 @@ def callback(
 
 
 @router.get("/exchange", response_model=schemas.SessionResponse)
-def exchange(code: str, response: Response, db: Session = Depends(get_db)):
+def exchange(
+    code: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """Trade the one-time code for a session token. The code works once, for sixty seconds.
 
     The token is signed and expires after `TOKEN_TTL_SECONDS`; the browser sends it as `Authorization: Bearer`.

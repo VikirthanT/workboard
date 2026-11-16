@@ -5,6 +5,7 @@ import { CaretDown, Eye, ShieldCheck, SignOut, SquaresFour, UsersThree } from '@
 import atiLogoFull from '../../assets/ati-logo-full.svg';
 import atiLogoFullInverse from '../../assets/ati-logo-full-inverse.svg';
 import { useDevAccounts, useDevSignIn, useSignOut } from '../../features/auth';
+import { usePendingSuggestionCount } from '../../features/suggestions';
 import { useCurrentUser } from '../../hooks';
 import { getSession, UNAUTHORIZED_EVENT } from '../../services/api';
 import { Avatar } from './ui/avatar';
@@ -15,12 +16,12 @@ import { Menu, type MenuItem } from './ui/menu';
 import { ThemeToggle } from './ui/theme-toggle';
 import { useToast } from './ui/toast';
 
-/** A header shortcut with a count badge; shown only when there is something to act on. */
-function CountLink({ to, label, count }: { to: string; label: string; count: number }) {
-  if (count <= 0) return null;
+/** A header shortcut with a count badge; shown only when there is something to act on, unless it is `always` (then the badge alone hides at zero). */
+function CountLink({ to, label, count, always }: { to: string; label: string; count: number; always?: boolean }) {
+  if (count <= 0 && !always) return null;
   return (
     <Link to={to} className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink focus-ring">
-      {label} <Badge tone="teal">{count}</Badge>
+      {label} {count > 0 && <Badge tone="teal">{count}</Badge>}
     </Link>
   );
 }
@@ -34,6 +35,8 @@ export function AppShell() {
   const signOut = useSignOut();
   const dev = useDevSignIn();
   const { data: me, isError } = useCurrentUser();
+  // Shared with the Suggestions page, which reads the same cached page, so the badge costs no extra request there.
+  const suggestionCount = usePendingSuggestionCount(me?.team?.id, !!me?.isManager);
   const accounts = useDevAccounts(import.meta.env.DEV && !!getSession());
 
   // 401 is handled once in axiosInstance; it only raises this event.
@@ -87,7 +90,7 @@ export function AppShell() {
 
           {/* The logo is the way back to the board. Admin tools live in the user menu, beside the theme toggle. */}
           <div className="ml-auto flex items-center gap-3">
-            <CountLink to="/?filter=needs_review" label="Needs review" count={me.counts.needsReview} />
+            {(me.isManager || me.isAdmin) && <CountLink to="/suggestions" label="Suggestions" count={suggestionCount.data ?? 0} always />}
             <ThemeToggle />
             {me && (
               <Menu
